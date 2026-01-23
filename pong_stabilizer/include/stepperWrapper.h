@@ -3,7 +3,7 @@
 
 struct stepperWrapper{
     uint8_t DIR_pin, STEP_pin, MS1_pin, MS2_pin, MS3_pin;
-    static TeensyTimerTool::PeriodicTimer sTimer;
+    TeensyTimerTool::PeriodicTimer sTimer;
     volatile long steps = 0;
     volatile bool dir = HIGH;
     volatile long targetStep = 0;
