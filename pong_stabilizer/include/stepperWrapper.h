@@ -4,10 +4,11 @@
 struct stepperWrapper{
     uint8_t DIR_pin, STEP_pin, MS1_pin, MS2_pin, MS3_pin;
     TeensyTimerTool::PeriodicTimer sTimer;
-    volatile long steps = 0;
+    volatile long long steps = 0;
     volatile bool dir = HIGH;
     volatile long targetStep = 0;
     uint8_t stepperID;
+    bool run_without_pos = false;
 
     stepperWrapper(uint8_t DIR_pin, uint8_t STEP_pin, uint8_t MS1_pin, uint8_t MS2_pin, uint8_t MS3_pin) {
         this->DIR_pin = DIR_pin;
@@ -32,4 +33,6 @@ struct stepperWrapper{
     void setTimerFreq(duration<double,std::milli> intervalMs);
     void setStep(long target) {this->targetStep = target;}
     bool isAtTarget() {return (this->targetStep == this->steps);}
+    void setRunWithoutTarget(bool val) {this->run_without_pos = val;}
+    void setDir(bool val) {this->dir = val;}
 };
