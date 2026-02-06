@@ -8,7 +8,7 @@ const int8_t MT6835::LOOKUP[] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1
 MT6835::MT6835(SPIClass *spi, uint8_t cs, uint8_t cal_en, uint8_t a_pin, uint8_t b_pin) 
     : _spi(spi), _cs(cs), _cal_en(cal_en), _a_pin(a_pin), _b_pin(b_pin) {}
 
-void MT6835::begin() {
+int MT6835::begin() {
     pinMode(_cs, OUTPUT);
     digitalWriteFast(_cs, HIGH);
     pinMode(_cal_en, OUTPUT);
@@ -24,12 +24,13 @@ void MT6835::begin() {
     // set ABZ rate to match ENCODER_PPR
     uint16_t abz_rez_code = ENCODER_PPR - 1;
     if(getABZRez() != abz_rez_code) {
-        Serial.println("[MT6835] Writing ABZ Res to EEPROM");
+        Serial.println("[MT6835] writing ABZ Res to EEPROM");
         setABZRez(abz_rez_code);
         programEEPROM();
-        return;
+        return -1;
     }
-    else Serial.println("[MT6835] Resolution already set");
+    else Serial.println("[MT6835] resolution already set");
+    return 0;
 }
 
 // High-speed ISR handler
@@ -120,7 +121,6 @@ void MT6835::setABZRez(uint16_t rez) {
     writeRegister(0x007, reg07);
     writeRegister(0x008, reg08);
 }
-
 
 uint16_t MT6835::getABZRez() {
     uint8_t reg07 = readRegister(0x007);
