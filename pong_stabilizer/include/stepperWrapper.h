@@ -1,38 +1,40 @@
 #include <Arduino.h>
 #include "TeensyTimerTool.h"
+#include "MT6835_encoder.h"
+#include "wiring.h"
 
-struct stepperWrapper{
-    uint8_t DIR_pin, STEP_pin, MS1_pin, MS2_pin, MS3_pin;
-    TeensyTimerTool::PeriodicTimer sTimer;
-    volatile long long steps = 0;
-    volatile bool dir = HIGH;
-    volatile long targetStep = 0;
-    uint8_t stepperID;
-    bool run_without_pos = false;
+//NOTE: using ENCODER_PPR as both encoder's resolution AND driver's microstepping for ease of use
+// maybe use smaller motor microstepping? - for finer control than sensor's accuracy?
 
-    stepperWrapper(uint8_t DIR_pin, uint8_t STEP_pin, uint8_t MS1_pin, uint8_t MS2_pin, uint8_t MS3_pin) {
-        this->DIR_pin = DIR_pin;
-        this->STEP_pin = STEP_pin;
-        this->MS1_pin = MS1_pin;
-        this->MS2_pin = MS2_pin;
-        this->MS3_pin = MS3_pin;
+#define MAX_ANGLE_ERROR 0.05
+#define RPM_TO_US(rpm)  (60000000.0f / ((rpm) * ENCODER_PPR))
+#define US_TO_RPM(us)   (60000000.0f / ((us) * ENCODER_PPR))
 
-        pinMode(this->DIR_pin, OUTPUT);
-        pinMode(this->STEP_pin, OUTPUT);
-        pinMode(this->MS1_pin, OUTPUT);
-        pinMode(this->MS2_pin, OUTPUT);
-        pinMode(this->MS3_pin, OUTPUT);
+class stepperWrapper{
+    uint8_t _dir, _step;
+    TeensyTimerTool::PeriodicTimer _sTimer;
+    MT6835* _encoder = NULL;
+    volatile long long _steps = 0; // used only for running without encoder
+    volatile bool _direction = HIGH;
+    volatile long long _targetStep = 0;
+    uint8_t _stepperID;
+    bool _runWithoutEncoder = false;
 
-        // no microstepping
-        setMicrosteps(LOW, LOW, LOW);
+public:
+    stepperWrapper(uint8_t dir, uint8_t step, MT6835* encoder)
+        : _dir(dir), _step(step), _encoder(encoder)
+    {
+        pinMode(_dir, OUTPUT);
+        pinMode(_step, OUTPUT);
+        if (_encoder) _encoder->begin();
     }
 
     void stepCallback();
-    void setMicrosteps(uint8_t MS1_val, uint8_t MS2_val, uint8_t MS3_val);
-    void initTimerFreq(duration<double,std::milli> intervalMs);
-    void setTimerFreq(duration<double,std::milli> intervalMs);
-    void setStep(long target) {this->targetStep = target;}
-    bool isAtTarget() {return (this->targetStep == this->steps);}
-    void setRunWithoutTarget(bool val) {this->run_without_pos = val;}
-    void setDir(bool val) {this->dir = val;}
+    void stepCallbackNoEncoder();
+    void initTimerFreq(float intervalUs);
+    void setTimerFreq(float intervalUs);
+    void setRunWithoutEncoder(bool val) {_runWithoutEncoder = val;}
+    bool isAtTarget();
+    void setTargetStep(long long target) {_targetStep = target;}
+    MT6835* getEncoder() {return _encoder;}
 };
