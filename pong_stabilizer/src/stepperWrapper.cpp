@@ -2,7 +2,7 @@
 #include "MT6835_encoder.h"
 
 void stepperWrapper::stepCallback() {
-    if (isAtTarget()) return;
+    if (isAtTarget() && !_runWithoutPosition) return;
 
     digitalToggleFast(_step);
 
@@ -10,31 +10,30 @@ void stepperWrapper::stepCallback() {
     // in case of mecanically skipped steps
     // tracking is done by pulses reported by encoder
     if (!_runWithoutPosition) {
-        if (_encoder->getRawPulses() < _targetStep) {
+        if (_encoder->getRawPulses() > _targetStep) {
             _direction = HIGH;
-            // _steps++;
         } else {
             _direction = LOW;
-            // _steps--;
         }
     }
     digitalWriteFast(_dir, _direction);
 }
 
 void stepperWrapper::stepCallbackNoEncoder() {
-    if(_steps == _targetStep) return;
+    if(_steps == _targetStep && !_runWithoutPosition) return;
 
     digitalToggleFast(_step);
 
     if (!_runWithoutPosition) {
         if (_steps < _targetStep) {
             _direction = HIGH;
-            _steps++;
         } else {
             _direction = LOW;
-            _steps--;
         }
     }
+
+    if (_direction == HIGH) _steps++;
+    else _steps--;
     digitalWriteFast(_dir, _direction);
 }
 

@@ -13,7 +13,7 @@ int MT6835::begin() {
     digitalWriteFast(_cs, HIGH);
     pinMode(_cal_en, OUTPUT);
     digitalWriteFast(_cal_en, LOW);
-
+    delay(100);
     pinMode(_a_pin, INPUT_PULLUP);
     pinMode(_b_pin, INPUT_PULLUP);
 
@@ -23,6 +23,7 @@ int MT6835::begin() {
 
     // set ABZ rate to match ENCODER_PPR
     uint16_t abz_rez_code = ENCODER_PPR - 1;
+    getABZRez();
     if(getABZRez() != abz_rez_code) {
         Serial.println("[MT6835] writing ABZ Res to EEPROM");
         setABZRez(abz_rez_code);
@@ -47,12 +48,11 @@ float MT6835::getAngle() const {
 uint8_t MT6835::readRegister(uint16_t addr) {
     _spi->beginTransaction(_settings);
     digitalWriteFast(_cs, LOW);
-    delay(10);
+    // delayMicroseconds(10);
     _spi->transfer16(OP_READ | (addr & 0x0FFF));
     uint8_t val = _spi->transfer(0);
-    delay(10);
     digitalWriteFast(_cs, HIGH);
-    delay(10);
+    // delayMicroseconds(10);
     _spi->endTransaction();
     return val;
 }
@@ -60,24 +60,24 @@ uint8_t MT6835::readRegister(uint16_t addr) {
 void MT6835::writeRegister(uint16_t addr, uint8_t data) {
     _spi->beginTransaction(_settings);
     digitalWriteFast(_cs, LOW);
-    delay(10);
+    // delayMicroseconds(10);
     _spi->transfer16(OP_WRITE | (addr & 0x0FFF));
     _spi->transfer(data);
-    delay(10);
     digitalWriteFast(_cs, HIGH);
-    delay(10);
+    // delayMicroseconds(10);
     _spi->endTransaction();
 }
 
 void MT6835::programEEPROM(){
    _spi->beginTransaction(_settings);
     digitalWriteFast(_cs, LOW);
-    delay(10);
+    // delayMicroseconds(10);
     _spi->transfer16(OP_EEPROM_PROGRAM);
     uint8_t ack = _spi->transfer(0);
-    delay(10);
+    // delayMicroseconds(10);
     digitalWriteFast(_cs, HIGH);
     delay(10);
+    _spi->endTransaction();
 
     if (ack == 0x55) {
         Serial.println("[MT6835] EEPROM programmed, waiting 6s");
@@ -85,7 +85,6 @@ void MT6835::programEEPROM(){
         Serial.println("[MT6835] turn off system");
     }
     else Serial.println("[MT6835] ERROR programming EEPROM");
-    _spi->endTransaction();
 }
 
 void MT6835::checkHealth() {
@@ -102,7 +101,6 @@ void MT6835::setFrequencyRange(uint8_t autocal_freq) {
     writeRegister(0x00E, reg0E);
 
     Serial.println("[MT6835] frequency range set");
-
 }
 
 uint8_t MT6835::getFrequencyRange() {
@@ -130,20 +128,40 @@ uint16_t MT6835::getABZRez() {
     return abz_rez;
 }
 
+void MT6835::setZeroPos() {
+   _spi->beginTransaction(_settings);
+    digitalWriteFast(_cs, LOW);
+    // delayMicroseconds(10);
+    _spi->transfer16(OP_AUTO_ZERO_POS);
+    uint8_t ack = _spi->transfer(0);
+    // delayMicroseconds(10);
+    digitalWriteFast(_cs, HIGH);
+    delay(10);
+    _spi->endTransaction();
+}
+
+uint16_t MT6835::getZeroPos() {
+    uint8_t reg09 = readRegister(0x009);
+    uint8_t reg0A = readRegister(0x00A);
+    uint16_t zeroPos = ((uint16_t) reg09 << 4) | ((reg0A >> 4) & 0x0F);
+
+    return zeroPos;
+}
+
 bool MT6835::autoCalibrate(uint32_t (*getRevs)()) {
     digitalWriteFast(_cal_en, HIGH);
-
-    uint32_t start_time = millis();
+    delay(10);
     uint8_t cal_status = 0;
 
     while (true) {
-        this->checkHealth();
+        checkHealth();
+        debugHiddenBits();
         uint8_t reg113 = readRegister(0x113);
         cal_status = (reg113 >> 6) & 0x03;
 
         if (cal_status == 0b11) {
             Serial.println("[MT6835] SUCCESS, EEPROM written, waiting 6s...");
-            delay(6000);
+            delay(6200);
             digitalWriteFast(_cal_en, LOW);
             return true;
         } 
@@ -153,20 +171,33 @@ bool MT6835::autoCalibrate(uint32_t (*getRevs)()) {
             digitalWriteFast(_cal_en, LOW);
             return false;
         }
-
-        if (millis() - start_time > 60000) {
-            Serial.println("[MT6835] TIMEOUT");
+        else if (cal_status == 0b00) {
+            Serial.println("[MT6835] No calibration");
             digitalWriteFast(_cal_en, LOW);
             return false;
         }
 
         if (getRevs) {
             static uint32_t last_m = 0;
-            if (millis() - last_m > 1000) {
+            if (millis() - last_m > 100) {
                 Serial.printf("[MT6835] calibrating, revs done: %lu\n", getRevs());
                 last_m = millis();
             }
         }
-        delay(25);
+        delay(250);
     }
+}
+
+// RUN THIS WHILE SPINNING AT 150 RPM (Range 0b101)
+void MT6835::debugHiddenBits() {
+    uint8_t raw = readRegister(0x113);
+
+    // Bits 1:0 (Magnet Status)
+    uint8_t mag = raw & 0x03; 
+    // Bits 3:2 (Rotation/Tracking Lock)
+    uint8_t track = (raw >> 2) & 0x03;
+    // Bits 7:6 (Calibration Status)
+    uint8_t cal = (raw >> 6) & 0x03;
+
+    Serial.printf("RAW: 0x%02X | CAL:%d | TRACK:%d | MAG:%d\n", raw, cal, track, mag);
 }

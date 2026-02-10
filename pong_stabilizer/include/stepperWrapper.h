@@ -4,7 +4,7 @@
 #include "wiring.h"
 #include <exception>
 
-#define MAX_ANGLE_ERROR 0.05
+#define MAX_ANGLE_ERROR 0.075
 #define RPM_TO_US(rpm)  (60000000.0f / ((rpm) * ENCODER_PPR))
 #define US_TO_RPM(us)   (60000000.0f / ((us) * ENCODER_PPR))
 
@@ -34,11 +34,12 @@ public:
     void setTimerFreqRPM(float intervalRPM);
     void setRunWithoutEncoder(bool val) {_runWithoutEncoder = val;}
     void setRunWithoutPosition(bool val) {_runWithoutPosition = val;}
-    void setDirection(bool val) {_runWithoutPosition = val;}
+    void setDirection(bool val) {_direction = val;}
     bool getDirection() {return _direction;}
     bool isAtTarget();
     void setTargetStep(long long target) {_targetStep = target;}
     MT6835* getEncoder() {return _encoder;}
+    long long getSteps() {return _steps;}
 
 private:
     uint8_t _dir, _step;

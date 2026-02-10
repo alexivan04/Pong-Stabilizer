@@ -5,13 +5,17 @@
 #include <SPI.h>
 #include <cstdint>
 
-#define ENCODER_PPR           16384
-#define STEPS_TO_DEG(steps)   ((steps) * (360.0f / ENCODER_PPR))
-#define DEG_TO_STEPS(deg)     ((deg) * (ENCODER_PPR / 360.0f))
+#define ENCODER_PPR            16384
+#define ENCODER_PPR_MULTIPLIER 4
+#define STEPS_TO_DEG(steps)    ((steps) * (360.0f / (ENCODER_PPR * ENCODER_PPR_MULTIPLIER)))
+#define DEG_TO_STEPS(deg)      ((deg) * ((ENCODER_PPR * ENCODER_PPR_MULTIPLIER) / 360.0f))
 
 #define OP_READ               0x3000
 #define OP_WRITE              0x6000
 #define OP_EEPROM_PROGRAM     0xC000
+#define OP_AUTO_ZERO_POS      0x5000
+
+#define ZERO_POS_FINESSE      0.088f
 
 class MT6835 {
 public:
@@ -29,6 +33,8 @@ public:
     uint8_t getFrequencyRange();
     void setABZRez(uint16_t rez);
     uint16_t getABZRez();
+    void setZeroPos();
+    uint16_t getZeroPos();
 
     bool autoCalibrate(uint32_t (*getRevs)() = nullptr);
     void checkHealth();
@@ -36,6 +42,8 @@ public:
     uint8_t readRegister(uint16_t addr);
     void writeRegister(uint16_t addr, uint8_t data);
     void programEEPROM();
+
+    void debugHiddenBits();
 
 private:
     SPIClass *_spi;
