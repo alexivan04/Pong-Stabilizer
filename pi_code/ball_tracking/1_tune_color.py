@@ -1,6 +1,7 @@
 import cv2
 from picamera2 import Picamera2
 import numpy as np
+import os
 
 # --- CAMERA CONFIGURATION ---
 WIDTH = 640
@@ -12,13 +13,33 @@ GAIN = 2.0
 
 def nothing(x): pass
 
+# --- LOAD PREVIOUS HSV VALUES ---
+# Set some safe default values first
+l_h_init, l_s_init, l_v_init = 20, 100, 100
+u_h_init, u_s_init, u_v_init = 40, 255, 255
+
+if os.path.exists("hsv_values.txt"):
+    try:
+        with open("hsv_values.txt", "r") as f:
+            lines =[line.strip() for line in f if line.strip()]
+            if len(lines) >= 2:
+                l_h_init, l_s_init, l_v_init =[int(x) for x in lines[0].split(',')]
+                u_h_init, u_s_init, u_v_init = [int(x) for x in lines[1].split(',')]
+                print("Loaded previous values from hsv_values.txt!")
+    except Exception as e:
+        print(f"Warning: Could not read hsv_values.txt properly. Using defaults. ({e})")
+else:
+    print("No hsv_values.txt found. Starting with default values.")
+
+# --- SETUP GUI ---
 cv2.namedWindow("Tuner")
-cv2.createTrackbar("L - H", "Tuner", 20, 179, nothing)
-cv2.createTrackbar("L - S", "Tuner", 100, 255, nothing)
-cv2.createTrackbar("L - V", "Tuner", 100, 255, nothing)
-cv2.createTrackbar("U - H", "Tuner", 40, 179, nothing)
-cv2.createTrackbar("U - S", "Tuner", 255, 255, nothing)
-cv2.createTrackbar("U - V", "Tuner", 255, 255, nothing)
+# Pass the loaded values as the 3rd parameter to set their starting positions
+cv2.createTrackbar("L - H", "Tuner", l_h_init, 179, nothing)
+cv2.createTrackbar("L - S", "Tuner", l_s_init, 255, nothing)
+cv2.createTrackbar("L - V", "Tuner", l_v_init, 255, nothing)
+cv2.createTrackbar("U - H", "Tuner", u_h_init, 179, nothing)
+cv2.createTrackbar("U - S", "Tuner", u_s_init, 255, nothing)
+cv2.createTrackbar("U - V", "Tuner", u_v_init, 255, nothing)
 
 # --- picamera2 setup ---
 print("Initializing camera...")
@@ -67,6 +88,11 @@ while True:
         print("\n--- Your Tuned Values ---")
         print(f"LOWER_HSV = np.array([{l_h}, {l_s}, {l_v}])")
         print(f"UPPER_HSV = np.array([{u_h}, {u_s}, {u_v}])")
+        print("\n--- Saving Tuned Values ---")
+        with open("hsv_values.txt", "w") as f:
+            f.write(f"{l_h},{l_s},{l_v}\n")
+            f.write(f"{u_h},{u_s},{u_v}\n")
+        print("Saved to hsv_values.txt successfully!")
         break
 
 cv2.destroyAllWindows()

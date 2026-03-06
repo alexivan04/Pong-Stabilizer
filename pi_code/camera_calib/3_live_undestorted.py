@@ -2,15 +2,9 @@ import cv2
 import numpy as np
 import time
 
-# Load calibration data
-try:
-    with np.load('cam_calib.npz') as data:
-        mtx = data['mtx']
-        dist = data['dist']
-        print("Calibration loaded successfully.")
-except:
-    print("Error: 'cam_calib.npz' not found. Run Step 2 first.")
-    exit()
+with np.load('cam_calib_fisheye.npz') as data:
+    K = data['K']
+    D = data['D']
 
 def gstreamer_pipeline():
     return (
@@ -23,38 +17,36 @@ def gstreamer_pipeline():
 
 cap = cv2.VideoCapture(gstreamer_pipeline(), cv2.CAP_GSTREAMER)
 
-# --- PRE-CALCULATE MAPS (Optimization) ---
-h, w = 480, 640
-newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
-mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (w,h), 5)
-# -----------------------------------------
+h, w = 960, 1280
+
+# optional: balance controls cropping vs preserving FOV
+balance = 1.0  # 0 = crop more, 1 = keep full FOV
+
+new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(
+    K, D, (w, h), np.eye(3), balance=balance
+)
+
+map1, map2 = cv2.fisheye.initUndistortRectifyMap(
+    K, D, np.eye(3), new_K, (w, h), cv2.CV_16SC2
+)
 
 prev_time = 0
-
-print("Running Un-Distorted Stream @ 60 FPS target...")
 
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    # --- THE MAGIC STEP (Fast Remapping) ---
-    dst = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
-    
-    # Optional: Crop the image to remove black curved edges
-    # x, y, w, h = roi
-    # dst = dst[y:y+h, x:x+w]
-    # ---------------------------------------
+    undistorted = cv2.remap(frame, map1, map2, cv2.INTER_LINEAR)
 
-    # FPS Calc
     current_time = time.time()
     fps = 1 / (current_time - prev_time)
     prev_time = current_time
 
-    cv2.putText(dst, f"FPS: {int(fps)}", (10, 30), 
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(undistorted, f"FPS: {int(fps)}", (10,30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
 
-    cv2.imshow("Calibrated View", dst)
+    cv2.imshow("Fisheye Corrected", undistorted)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
