@@ -1,0 +1,9 @@
+Processing teensy41 (platform: teensy; board: teensy41; framework: arduino)
+--------------------------------------------------------------------------------
+--- Terminal on /dev/ttyACM0 | 9600 8-N-1
+--- Available filters and text transformations: debug, default, direct, hexlify, log2file, nocontrol, printable, send_on_enter, time
+--- More details at https://bit.ly/pio-monitor-filters
+--- Quit: Ctrl+C | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H
+Teensy UART Receiver Initialized. Waiting for data...
+time_ms,is_found,ball_x,ball_y,ball_z
+End byte mismatch!

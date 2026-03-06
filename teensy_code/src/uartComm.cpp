@@ -1,8 +1,5 @@
 #include "uartComm.h"
 
-// Define the global variable that was declared in the header
-BallData ballData;
-
 // Internal variables for the serial parser (hidden from other files using 'static')
 static byte rxBuffer[32];
 static uint8_t payloadSize = 0;
@@ -15,17 +12,6 @@ static void processPacket() {
     // Directly copy the payload from the buffer into our struct
     // This is very efficient.
     memcpy(&ballData, &rxBuffer[2], sizeof(BallData));
-
-    // Optional: Print to serial monitor for debugging. 
-    // You can comment this out later to save processing time.
-    Serial.print("Received Ball Data: Found=");
-    Serial.print(ballData.is_found);
-    Serial.print(", X=");
-    Serial.print(ballData.x, 1);
-    Serial.print(", Y=");
-    Serial.print(ballData.y, 1);
-    Serial.print(", Z=");
-    Serial.println(ballData.z, 1);
   }
 }
 
