@@ -26,6 +26,95 @@ extern volatile float Kp;
 extern volatile float Ki;
 extern volatile float Kd; 
 
+// ==========================================
+// --- TRAJECTORY GENERATOR ---
+// ==========================================
+enum PatternType {
+    PATTERN_CENTER = 0,
+    PATTERN_CIRCLE = 1,
+    PATTERN_STAR = 2,
+    PATTERN_FIGURE8 = 3
+};
+
+// ---> CHANGE THIS VARIABLE TO TEST DIFFERENT PATTERNS <---
+PatternType currentPattern = PATTERN_FIGURE8;
+
+void getTrajectoryTarget(float &tx, float &ty) {
+    // Safety feature: If ball is lost, return plate to center immediately
+    if (!ballData.is_found) {
+        tx = 0.0f;
+        ty = 0.0f;
+        return;
+    }
+
+    float t = millis() / 1000.0f; // Current time in seconds
+
+    switch(currentPattern) {
+        case PATTERN_CENTER:
+            tx = 0.0f;
+            ty = 0.0f;
+            break;
+
+        case PATTERN_CIRCLE: {
+            float radius = 50.0f; // Size of the circle (mm)
+            float period = 5.0f;  // Seconds to complete one loop
+            float omega = (2.0f * PI) / period;
+            
+            tx = radius * cos(omega * t);
+            ty = radius * sin(omega * t);
+            break;
+        }
+
+        case PATTERN_STAR: {
+            // A 5-point star made by drawing straight lines between 10 alternating points
+            const int num_points = 10;
+            float outer_R = 60.0f; // Tip of the star
+            float inner_R = 25.0f; // Inner corners of the star
+            float period = 10.0f;  // Seconds to draw the whole star
+
+            float mod_t = fmod(t, period);
+            float segment_time = period / num_points;
+            
+            int idx = mod_t / segment_time;
+            float progress = (mod_t - (idx * segment_time)) / segment_time; // 0.0 to 1.0 mapping
+            
+            int next_idx = (idx + 1) % num_points;
+            
+            // Helper lambda to calculate X/Y for a specific star point
+            auto get_pt = [&](int i, float &px, float &py) {
+                // Offset by PI/2 so the star points upwards
+                float angle = (PI / 2.0f) + i * (PI / 5.0f); 
+                float r = (i % 2 == 0) ? outer_R : inner_R;
+                px = r * cos(angle);
+                py = r * sin(angle);
+            };
+            
+            float x1, y1, x2, y2;
+            get_pt(idx, x1, y1);
+            get_pt(next_idx, x2, y2);
+            
+            // Linear interpolation (draws a perfectly straight line between points)
+            tx = x1 + (x2 - x1) * progress;
+            ty = y1 + (y2 - y1) * progress;
+            break;
+        }
+
+        case PATTERN_FIGURE8: {
+            // Lissajous curve (Infinity symbol)
+            float radius_x = 60.0f;
+            float radius_y = 30.0f;
+            float period = 6.0f;
+            float omega = (2.0f * PI) / period;
+            
+            tx = radius_x * sin(omega * t);
+            ty = radius_y * sin(2.0f * omega * t);
+            break;
+        }
+    }
+}
+// ==========================================
+
+
 void stepperDelay(uint32_t waitTime_ms) {
     uint32_t startTime = millis();
     uint32_t lastUpdate = 0;
@@ -75,24 +164,25 @@ void runPongLoop() {
     stepper_3.setCurrentPositionInSteps(round(DEG_TO_MOTOR_STEPS(motorAngles[2])));
     stepper_4.setCurrentPositionInSteps(round(-DEG_TO_MOTOR_STEPS(motorAngles[3])));
 
-    // Serial.println("time_ms,is_found,ball_x,ball_y,ball_z");
-
     uint32_t lastUpdate = 0;
 
     while(true) {
         checkSerial();
 
-        // 2. Rulează Kinematica la exact 200Hz (la fiecare 5ms)
-        // am dat la 2ms. poate gasesc ceva metoda mai buna, un timer sau cv
         if (millis() - lastUpdate >= 5) {
             lastUpdate = millis();
 
-            // pid din uart
             Kp = pidValues.P;
             Ki = pidValues.I;
             Kd = pidValues.D;
             
-            computeMotorAngles(0, 0, motorAngles);
+            // --- NEW: FETCH DYNAMIC TARGET ---
+            float targetX = 0.0f;
+            float targetY = 0.0f;
+            getTrajectoryTarget(targetX, targetY);
+
+            // Pass the moving target to the PID kinematics
+            computeMotorAngles(targetX, targetY, motorAngles);
 
             stepper_1.setTargetStep(DEG_TO_MOTOR_STEPS(motorAngles[0]));
             stepper_2.setTargetStep(-DEG_TO_MOTOR_STEPS(motorAngles[1]));
