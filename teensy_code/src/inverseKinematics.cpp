@@ -1,9 +1,9 @@
 #include "inverseKinematics.h"
 #include "uartComm.h" 
 
-volatile float Kp = 0.126f;
-volatile float Ki = 0.097f;
-volatile float Kd = 0.076f; 
+volatile float Kp = 0.149f;
+volatile float Ki = 0.112f;
+volatile float Kd = 0.068f; 
 
 float errX_int = 0, lastErrX = 0;
 float errY_int = 0, lastErrY = 0;
