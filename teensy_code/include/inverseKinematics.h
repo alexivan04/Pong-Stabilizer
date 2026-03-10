@@ -12,6 +12,9 @@ const float Rb = 129.0;   // Raza bazei (centru - ax motor) (mm)
 const float Rp = 110.0;    // Raza platformei (centru - prindere) (mm)
 const float h0 = 100.0;   // Înălțimea neutră (mm)
 
+const float MIN_ANGLE = -15.0;
+const float MAX_ANGLE = 15.0;
+
 const float servo_gamma[4] = {5*PI/4.0f, 3*PI/4.0f, PI/4.0f, 7*PI/4.0f};
 extern volatile float motorAngles[4];
 

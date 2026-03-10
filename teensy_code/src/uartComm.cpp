@@ -6,13 +6,17 @@ static uint8_t payloadSize = 0;
 
 // Internal function to process a complete and valid packet
 static void processPacket() {
-  byte packetType = rxBuffer[0];
+    byte packetType = rxBuffer[0];
   
-  if (packetType == PACKET_TYPE_BALL_DATA) {
-    // Directly copy the payload from the buffer into our struct
-    // This is very efficient.
-    memcpy(&ballData, &rxBuffer[2], sizeof(BallData));
-  }
+    if (packetType == PACKET_TYPE_BALL_DATA) {
+        // Directly copy the payload from the buffer into our struct
+        // This is very efficient.
+        memcpy(&ballData, &rxBuffer[2], sizeof(BallData));
+    }
+
+    if (packetType == PACKET_TYPE_PID_UPDATE) {
+        memcpy(&pidValues, &rxBuffer[2], sizeof(PIDValues));
+    }
 }
 
 // Non-blocking function to check for and parse incoming packets
