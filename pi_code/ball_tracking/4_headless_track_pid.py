@@ -39,7 +39,7 @@ cv2.namedWindow("Live PID Tuner")
 # (e.g., 185 -> 0.185)
 cv2.createTrackbar("P (*1000)", "Live PID Tuner", 100, 1000, nothing)
 cv2.createTrackbar("I (*1000)", "Live PID Tuner", 0, 1000, nothing)
-cv2.createTrackbar("D (*1000)", "Live PID Tuner", 50, 1000, nothing)
+cv2.createTrackbar("D (*1000)", "Live PID Tuner", 50, 5000, nothing)
 
 # Keep track so we only send UART when a slider actually changes
 last_p, last_i, last_d = -1, -1, -1
