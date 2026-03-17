@@ -6,7 +6,7 @@
 #include "MT6835_encoder.h"
 
 // mechanical settings
-#define MOTOR_PPR 1600.0f
+#define MOTOR_PPR 3200.0f
 #define DEG_TO_MOTOR_STEPS(deg) ((deg) * MOTOR_PPR / 360.0f)
 
 class stepperWrapper{
