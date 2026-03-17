@@ -33,11 +33,15 @@ enum PatternType {
     PATTERN_CENTER = 0,
     PATTERN_CIRCLE = 1,
     PATTERN_STAR = 2,
-    PATTERN_FIGURE8 = 3
+    PATTERN_FIGURE8 = 3,
+    PATTERN_CYCLE_ALL = 4  // New cycling mode
+
+    
 };
 
 // ---> CHANGE THIS VARIABLE TO TEST DIFFERENT PATTERNS <---
-PatternType currentPattern = PATTERN_FIGURE8;
+PatternType currentPattern = PATTERN_CYCLE_ALL;
+PatternType activePattern;
 
 void getTrajectoryTarget(float &tx, float &ty) {
     // Safety feature: If ball is lost, return plate to center immediately
@@ -48,8 +52,15 @@ void getTrajectoryTarget(float &tx, float &ty) {
     }
 
     float t = millis() / 1000.0f; // Current time in seconds
+    activePattern = currentPattern;
 
-    switch(currentPattern) {
+    // If cycle mode is selected, switch the pattern every 10 seconds
+    if (currentPattern == PATTERN_CYCLE_ALL) {
+        const int modeDuration = 10; // Time per mode in seconds
+        activePattern = static_cast<PatternType>(((int)(t / modeDuration)) % 4);
+    }
+
+    switch(activePattern) {
         case PATTERN_CENTER:
             tx = 0.0f;
             ty = 0.0f;
@@ -112,7 +123,6 @@ void getTrajectoryTarget(float &tx, float &ty) {
         }
     }
 }
-// ==========================================
 
 
 void stepperDelay(uint32_t waitTime_ms) {
