@@ -12,6 +12,7 @@ START_BYTE = 0xAA
 END_BYTE = 0xBB
 PACKET_TYPE_BALL_DATA = 1
 PACKET_TYPE_PID_UPDATE = 2
+PACKET_TYPE_START = 3
 
 SERIAL_PORT = '/dev/ttyAMA0'
 BAUD_RATE = 115200
@@ -64,6 +65,11 @@ picam2.set_controls({"FrameDurationLimits": (int(1e6/60), int(1e6/60)), "Exposur
 picam2.start()
 kernel = np.ones((3,3), np.uint8)
 
+
+raw_frame = picam2.capture_array()
+send_packet(PACKET_TYPE_START, b'')
+isStarted = False
+
 try:
     while True:
         # --- 2. HANDLE BALL TRACKING ---
@@ -91,8 +97,12 @@ try:
                 Y_real = ((y - cy) * Z_depth) / fy
 
         # Send Ball Data Packet
-        ball_payload = struct.pack('<Bfff', is_found, float(X_real), float(Y_real), float(Z_depth))
-        send_packet(PACKET_TYPE_BALL_DATA, ball_payload)
+        if is_found and not isStarted:
+            send_packet(PACKET_TYPE_START, b'')
+            isStarted = True
+        if isStarted:
+            ball_payload = struct.pack('<Bfff', is_found, float(X_real), float(Y_real), float(Z_depth))
+            send_packet(PACKET_TYPE_BALL_DATA, ball_payload)
 
 except KeyboardInterrupt:
     print("\nStopped.")
