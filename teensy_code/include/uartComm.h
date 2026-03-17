@@ -8,6 +8,7 @@ const byte START_BYTE = 0xAA;
 const byte END_BYTE = 0xBB;
 const byte PACKET_TYPE_BALL_DATA = 1;
 const byte PACKET_TYPE_PID_UPDATE = 2;
+const byte PACKET_TYPE_START = 3;
 // This struct defines the exact layout of the payload for ball data.
 // The __attribute__((packed)) is important to prevent memory alignment issues.
 struct __attribute__((packed)) BallData {
@@ -26,6 +27,7 @@ struct __attribute__((packed)) PIDValues {
 // Declare the global variable so any file including this header can read the data.
 extern BallData ballData;
 extern PIDValues pidValues;
+extern boolean isStarted;
 
 // Function declarations
 void checkSerial();

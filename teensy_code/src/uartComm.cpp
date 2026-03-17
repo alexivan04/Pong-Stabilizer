@@ -17,6 +17,8 @@ static void processPacket() {
     if (packetType == PACKET_TYPE_PID_UPDATE) {
         memcpy(&pidValues, &rxBuffer[2], sizeof(PIDValues));
     }
+
+    if (packetType == PACKET_TYPE_START) isStarted = true;
 }
 
 // Non-blocking function to check for and parse incoming packets

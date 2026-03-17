@@ -16,11 +16,27 @@ const float ALPHA = 0.15;
 float smoothedDerivX = 0;
 float smoothedDerivY = 0;
 
+// Variables for Derivative-on-Measurement
+float lastFilteredX = 0;
+float lastFilteredY = 0;
+
+void resetPID() {
+    errX_int = 0;
+    lastErrX = 0;
+    errY_int = 0;
+    lastErrY = 0;
+    filteredX = 0;
+    filteredY = 0;
+    smoothedDerivX = 0;
+    smoothedDerivY = 0;
+    lastFilteredX = 0;
+    lastFilteredY = 0;
+}
+
 // PLATE BOUNDARY LIMITS (in mm)
 const float PLATE_LIMIT_X = 180.0f; 
 const float PLATE_LIMIT_Y = 180.0f;
 
-// We only use this function once now to find the perfect "Zero" position.
 float calculateArmAngle(int i, float pitch, float roll) {
     float Zi = h0 + Rp * (sin(roll) * cos(servo_gamma[i]) + sin(pitch) * sin(servo_gamma[i]));
     float Z_target = Zi - L3;
@@ -65,34 +81,34 @@ void computeMotorAngles(float targetX, float targetY, volatile float *motorAngle
     if (dt <= 0.0f || dt > 0.1f) dt = 0.01f; 
     lastTime = now;
 
-    // --- PID NOW OUTPUTS DIRECT DEGREE OFFSETS ---
+    // --- DERIVATIVE ON MEASUREMENT APPLIED HERE ---
     
     // X Axis PID (Roll / Left-Right Tilt)
     errX_int = constrain(errX_int + (errorX * dt), -50.0f, 50.0f);
-    float rawDerivX = (errorX - lastErrX) / dt;
+    // Use the actual ball movement, NOT the error movement for the D term
+    float rawDerivX = (filteredX - lastFilteredX) / dt;
     smoothedDerivX = (0.2f * rawDerivX) + (0.8f * smoothedDerivX);
     float roll_deg = (pidValues.P * errorX) + (pidValues.I * errX_int) + (pidValues.D * smoothedDerivX);
+    
+    lastFilteredX = filteredX;
     lastErrX = errorX;
 
     // Y Axis PID (Pitch / Front-Back Tilt)
     errY_int = constrain(errY_int + (errorY * dt), -50.0f, 50.0f);
-    float rawDerivY = (errorY - lastErrY) / dt;
+    // Use the actual ball movement, NOT the error movement for the D term
+    float rawDerivY = (filteredY - lastFilteredY) / dt;
     smoothedDerivY = (0.2f * rawDerivY) + (0.8f * smoothedDerivY);
     float pitch_deg = (pidValues.P * errorY) + (pidValues.I * errY_int) + (pidValues.D * smoothedDerivY);
+    
+    lastFilteredY = filteredY;
     lastErrY = errorY;
 
     // Constrain the maximum tilt to 15 degrees to prevent mechanical crashes
     pitch_deg = constrain(pitch_deg, -10.0f, 15.0f) * 1.0f;
     roll_deg = constrain(roll_deg, -10.0f, 15.0f) * -1.0f;
 
-    // --- LINEAR DEGREE MIXING (The Magic Fix) ---
-    // Get the exact mechanical "Flat" angle (usually around ~135 degrees)
+    // --- LINEAR DEGREE MIXING ---
     float base_angle = calculateArmAngle(0, 0.0f, 0.0f);
-
-    // Apply algebraic symmetry. 
-    // Notice how M0 is the exact mathematical inverse of M2.
-    // Notice how M1 is the exact mathematical inverse of M3.
-    // This forces the platform into a perfect parallelogram, making binding impossible.
     
     motorAngles[0] = base_angle - pitch_deg + roll_deg; // M0: Right-Back
     motorAngles[1] = base_angle + pitch_deg + roll_deg; // M1: Right-Front
