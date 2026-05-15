@@ -1,0 +1,8 @@
+nohup: ignoring input
+[0:02:15.173723103] [1679]  INFO Camera camera_manager.cpp:340 libcamera v0.7.0+rpt20260205
+[0:02:15.182125660] [1682]  INFO RPI pisp.cpp:720 libpisp version 1.3.0
+[0:02:15.191302160] [1682]  INFO IPAProxy ipa_proxy.cpp:180 Using tuning file /usr/share/libcamera/ipa/rpi/pisp/imx296.json
+[0:02:15.198228755] [1682]  INFO Camera camera_manager.cpp:223 Adding camera '/base/axi/pcie@1000120000/rp1/i2c@88000/imx296@1a' for pipeline handler rpi/pisp
+[0:02:15.198259495] [1682]  INFO RPI pisp.cpp:1181 Registered camera /base/axi/pcie@1000120000/rp1/i2c@88000/imx296@1a to CFE device /dev/media0 and ISP device /dev/media1 using PiSP variant BCM2712_D0
+[0:02:15.201050348] [1679]  INFO Camera camera.cpp:1215 configuring streams: (0) 640x480-BGR888/sRGB (1) 1456x1088-BGGR_PISP_COMP1/RAW
+[0:02:15.201141420] [1682]  INFO RPI pisp.cpp:1485 Sensor: /base/axi/pcie@1000120000/rp1/i2c@88000/imx296@1a - Selected sensor format: 1456x1088-SBGGR10_1X10/RAW - Selected CFE format: 1456x1088-PC1B/RAW

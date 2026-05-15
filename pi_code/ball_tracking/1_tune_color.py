@@ -7,8 +7,8 @@ import os
 WIDTH = 640
 HEIGHT = 480
 FRAMERATE = 60
-SHUTTER = 10000
-GAIN = 2.0
+SHUTTER = 7000
+GAIN = 1.5
 # -----------------------------
 
 def nothing(x): pass
