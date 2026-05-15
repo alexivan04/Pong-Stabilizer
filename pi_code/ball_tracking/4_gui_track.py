@@ -62,7 +62,7 @@ map1, map2 = cv2.fisheye.initUndistortRectifyMap(K_fisheye, D_fisheye, np.eye(3)
 picam2 = Picamera2()
 config = picam2.create_preview_configuration(main={"size": (WIDTH, HEIGHT), "format": "BGR888"})
 picam2.configure(config)
-picam2.set_controls({"FrameDurationLimits": (int(1e6/60), int(1e6/60)), "ExposureTime": 7000, "AnalogueGain": 1.2, "AeEnable": False, "AwbEnable": False})
+picam2.set_controls({"FrameDurationLimits": (int(1e6/60), int(1e6/60)), "ExposureTime": 20000, "AnalogueGain": 2.0, "AeEnable": False, "AwbEnable": False})
 picam2.start()
 kernel = np.ones((3,3), np.uint8)
 

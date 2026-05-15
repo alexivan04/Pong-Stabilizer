@@ -9,10 +9,10 @@ const byte END_BYTE = 0xBB;
 const byte PACKET_TYPE_BALL_DATA = 1;
 const byte PACKET_TYPE_PID_UPDATE = 2;
 const byte PACKET_TYPE_START = 3;
-// This struct defines the exact layout of the payload for ball data.
-// The __attribute__((packed)) is important to prevent memory alignment issues.
+const byte PACKET_TYPE_PATTERN_CHANGE = 4;  // NEW: Teensy -> Pi
+
 struct __attribute__((packed)) BallData {
-  uint8_t is_found; // 0 for false, 1 for true
+  uint8_t is_found;
   float x;
   float y;
   float z;
@@ -24,12 +24,11 @@ struct __attribute__((packed)) PIDValues {
     float D;
 };
 
-// Declare the global variable so any file including this header can read the data.
 extern BallData ballData;
 extern PIDValues pidValues;
 extern boolean isStarted;
 
-// Function declarations
 void checkSerial();
+void sendPatternChange(uint8_t patternIndex);  // NEW
 
 #endif // UART_COMM_H

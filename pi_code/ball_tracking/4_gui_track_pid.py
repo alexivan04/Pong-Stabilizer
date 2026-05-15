@@ -24,6 +24,17 @@ except serial.SerialException:
     print("Could not open serial port.")
     exit()
 
+# --- PID SLIDERS ---
+def nothing(x): pass
+
+cv2.namedWindow("Ball Tracking")
+# Sliders use integers, divided by 1000 before sending (e.g. 185 -> 0.185)
+# Default values match Teensy hardcoded: Kp=0.149, Ki=0.112, Kd=0.068
+cv2.createTrackbar("P (*1000)", "Ball Tracking", 149, 1000, nothing)
+cv2.createTrackbar("I (*1000)", "Ball Tracking", 112, 1000, nothing)
+cv2.createTrackbar("D (*1000)", "Ball Tracking", 68,  5000, nothing)
+last_p, last_i, last_d = -1, -1, -1
+
 # --- PATTERN STATE ---
 # Teensy always sends the real sub-pattern (0-3), never 4.
 PATTERN_NAMES = {
@@ -287,6 +298,18 @@ try:
     while True:
         receive_packets()
 
+        # --- PID SLIDER HANDLING ---
+        p_val = cv2.getTrackbarPos("P (*1000)", "Ball Tracking")
+        i_val = cv2.getTrackbarPos("I (*1000)", "Ball Tracking")
+        d_val = cv2.getTrackbarPos("D (*1000)", "Ball Tracking")
+        if p_val != last_p or i_val != last_i or d_val != last_d:
+            pid_payload = struct.pack('<fff',
+                p_val / 1000.0,
+                i_val / 1000.0,
+                d_val / 1000.0)
+            send_packet(PACKET_TYPE_PID_UPDATE, pid_payload)
+            last_p, last_i, last_d = p_val, i_val, d_val
+
         raw_frame = picam2.capture_array()
         frame     = cv2.remap(raw_frame, map1, map2, cv2.INTER_LINEAR)
 
@@ -371,7 +394,18 @@ try:
         cv2.putText(frame, f"Vz: {vz:.1f}", (20, 220),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
 
-        # key hints overlay
+        # current PID values (read from sliders)
+        cur_p = cv2.getTrackbarPos("P (*1000)", "Ball Tracking") / 1000.0
+        cur_i = cv2.getTrackbarPos("I (*1000)", "Ball Tracking") / 1000.0
+        cur_d = cv2.getTrackbarPos("D (*1000)", "Ball Tracking") / 1000.0
+        cv2.putText(frame, f"P: {cur_p:.3f}", (20, 265),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 255, 100), 2)
+        cv2.putText(frame, f"I: {cur_i:.3f}", (20, 295),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 255, 100), 2)
+        cv2.putText(frame, f"D: {cur_d:.3f}", (20, 325),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (180, 255, 100), 2)
+
+        # key hints overlay (bottom-left, above pattern panel)
         hints = [
             "1:CENTER  2:CIRCLE",
             "3:STAR    4:FIG.8",
@@ -390,7 +424,7 @@ try:
         cv2.imshow("Ball Tracking", frame)
 
         key = cv2.waitKey(1) & 0xFF
-        if key == 27:
+        if key == 27:      # ESC
             break
         elif key == ord('1'):
             send_pattern_to_teensy(0)
@@ -413,6 +447,8 @@ try:
             current_pattern_text = PATTERN_NAMES[3]
             pattern_start_time   = time.time()
         elif key == ord('5'):
+            # CYCLE ALL — send index 4 to Teensy, Pi waits for
+            # Teensy to echo back the active sub-pattern
             send_pattern_to_teensy(4)
             current_pattern_text = "CYCLE ALL"
 
