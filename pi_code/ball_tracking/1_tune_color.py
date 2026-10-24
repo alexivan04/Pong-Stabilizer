@@ -1,70 +1,46 @@
 import cv2
-from picamera2 import Picamera2
 import numpy as np
 import os
 
-# --- CAMERA CONFIGURATION ---
-WIDTH = 640
-HEIGHT = 480
-FRAMERATE = 60
-SHUTTER = 20000
-GAIN = 2
-# -----------------------------
+import ball_detector as bd
+
+# Same camera settings, undistortion and plate area as the trackers, so the
+# mask you tune here is exactly the mask they use.
+#
+# Tip: keep L-V low and U-V at 255, and tune H and S instead. Brightness is
+# what changes with the room lighting; the ball's saturation barely does.
 
 def nothing(x): pass
 
 # --- LOAD PREVIOUS HSV VALUES ---
-# Set some safe default values first
-l_h_init, l_s_init, l_v_init = 20, 100, 100
-u_h_init, u_s_init, u_v_init = 40, 255, 255
-
-if os.path.exists("hsv_values.txt"):
-    try:
-        with open("hsv_values.txt", "r") as f:
-            lines =[line.strip() for line in f if line.strip()]
-            if len(lines) >= 2:
-                l_h_init, l_s_init, l_v_init =[int(x) for x in lines[0].split(',')]
-                u_h_init, u_s_init, u_v_init = [int(x) for x in lines[1].split(',')]
-                print("Loaded previous values from hsv_values.txt!")
-    except Exception as e:
-        print(f"Warning: Could not read hsv_values.txt properly. Using defaults. ({e})")
+(l_h_init, l_s_init, l_v_init), (u_h_init, u_s_init, u_v_init) = bd.load_hsv_range()
+if os.path.exists(bd.LEGACY_HSV_FILE):
+    print(f"Loaded previous values from {bd.LEGACY_HSV_FILE}!")
 else:
-    print("No hsv_values.txt found. Starting with default values.")
+    print(f"No {bd.LEGACY_HSV_FILE} found. Starting with default values.")
 
 # --- SETUP GUI ---
 cv2.namedWindow("Tuner")
 # Pass the loaded values as the 3rd parameter to set their starting positions
-cv2.createTrackbar("L - H", "Tuner", l_h_init, 179, nothing)
-cv2.createTrackbar("L - S", "Tuner", l_s_init, 255, nothing)
-cv2.createTrackbar("L - V", "Tuner", l_v_init, 255, nothing)
-cv2.createTrackbar("U - H", "Tuner", u_h_init, 179, nothing)
-cv2.createTrackbar("U - S", "Tuner", u_s_init, 255, nothing)
-cv2.createTrackbar("U - V", "Tuner", u_v_init, 255, nothing)
+cv2.createTrackbar("L - H", "Tuner", int(l_h_init), 179, nothing)
+cv2.createTrackbar("L - S", "Tuner", int(l_s_init), 255, nothing)
+cv2.createTrackbar("L - V", "Tuner", int(l_v_init), 255, nothing)
+cv2.createTrackbar("U - H", "Tuner", int(u_h_init), 179, nothing)
+cv2.createTrackbar("U - S", "Tuner", int(u_s_init), 255, nothing)
+cv2.createTrackbar("U - V", "Tuner", int(u_v_init), 255, nothing)
 
-# --- picamera2 setup ---
+map1, map2, new_K = bd.load_undistort()
+# plate distance unknown here: use the generous start value (largest circle)
+roi = bd.plate_roi(new_K[0, 0], bd.PLATE_Z_START_MM)
+roi_mask = bd.plate_roi_mask(new_K[0, 0], bd.PLATE_Z_START_MM)
+
 print("Initializing camera...")
-picam2 = Picamera2()
-# EFFICIENT CAPTURE: Request BGR format directly for OpenCV
-config = picam2.create_preview_configuration(
-    main={"size": (WIDTH, HEIGHT), "format": "BGR888"}
-)
-picam2.configure(config)
-
-picam2.set_controls({
-    "FrameDurationLimits": (int(1e6/FRAMERATE), int(1e6/FRAMERATE)),
-    "ExposureTime": SHUTTER,
-    "AnalogueGain": GAIN,
-    "AeEnable": False,
-    "AwbEnable": False,
-})
-picam2.start()
-print("Camera started. Tune sliders and press 'q' to quit.")
+picam2 = bd.start_camera()
+print("Camera started. Tune sliders and press 'q' to save and quit.")
 
 while True:
-    # frame is already in BGR format
-    frame = picam2.capture_array()
+    frame = cv2.remap(picam2.capture_array(), map1, map2, cv2.INTER_LINEAR)
 
-    # Processing is done on the native BGR frame
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
     l_h = cv2.getTrackbarPos("L - H", "Tuner")
@@ -77,10 +53,12 @@ while True:
     lower_hsv = np.array([l_h, l_s, l_v])
     upper_hsv = np.array([u_h, u_s, u_v])
     mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
-    
+    mask = cv2.bitwise_and(mask, roi_mask)
+
     # --- DISPLAY CORRECTION ---
     # Convert the BGR frame to RGB ONLY for displaying it correctly.
     display_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    cv2.circle(display_frame, (int(roi[0]), int(roi[1])), int(roi[2]), (255, 200, 0), 1)
     cv2.imshow("Original (Correct Colors)", display_frame)
     cv2.imshow("Mask (Tune to make ball white)", mask)
 
@@ -89,10 +67,10 @@ while True:
         print(f"LOWER_HSV = np.array([{l_h}, {l_s}, {l_v}])")
         print(f"UPPER_HSV = np.array([{u_h}, {u_s}, {u_v}])")
         print("\n--- Saving Tuned Values ---")
-        with open("hsv_values.txt", "w") as f:
+        with open(bd.LEGACY_HSV_FILE, "w") as f:
             f.write(f"{l_h},{l_s},{l_v}\n")
             f.write(f"{u_h},{u_s},{u_v}\n")
-        print("Saved to hsv_values.txt successfully!")
+        print(f"Saved to {bd.LEGACY_HSV_FILE} successfully!")
         break
 
 cv2.destroyAllWindows()

@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 import cv2
-from picamera2 import Picamera2
 import numpy as np
 import time
 import serial
 import struct
+import signal
 import math
+import os
+
+from ball_detector import WIDTH, HEIGHT, PATTERN_SCALE, UNIT_SCALE, create_tracker, load_undistort, start_camera
+
+def _on_sigterm(signum, frame):
+    raise KeyboardInterrupt
+signal.signal(signal.SIGTERM, _on_sigterm)
 
 # --- UART CONFIG ---
 START_BYTE = 0xAA
@@ -14,6 +21,9 @@ PACKET_TYPE_BALL_DATA      = 1
 PACKET_TYPE_PID_UPDATE     = 2
 PACKET_TYPE_START          = 3
 PACKET_TYPE_PATTERN_CHANGE = 4
+PACKET_TYPE_TARGET_POS     = 5
+# Teensy's plate-height range in deg above the low stop (HEIGHT_MIN/MAX_DEG in inverseKinematics.h)
+PLATE_HEIGHT_MIN_DEG, PLATE_HEIGHT_MAX_DEG = 15.0, 30.0
 
 SERIAL_PORT = '/dev/ttyAMA0'
 BAUD_RATE   = 115200
@@ -35,6 +45,16 @@ PATTERN_NAMES = {
 current_pattern      = 0
 current_pattern_text = "CENTER"
 pattern_start_time   = time.time()
+target_x, target_y   = 0.0, 0.0   # Teensy's current target, from TARGET_POS packets
+plate_height_deg     = None       # Teensy's plate height setting (newer firmware only)
+
+# --- OPTIONAL RUN LOG (TRACK_LOG=/path/dir): per-frame CSV + a frame every 2 s ---
+LOG_DIR = os.environ.get("TRACK_LOG")
+log_file, last_log_frame = None, 0.0
+if LOG_DIR:
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_file = open(os.path.join(LOG_DIR, "track.csv"), "w", buffering=1)
+    log_file.write("t,found,x,y,z,vx,vy,target_x,target_y,pattern,height_deg\n")
 
 # --- SERIAL SEND ---
 def send_packet(packet_type, payload):
@@ -56,6 +76,7 @@ _rx_state = 0  # 0=waiting for START_BYTE, 1=reading packet
 
 def receive_packets():
     global current_pattern, current_pattern_text, pattern_start_time
+    global target_x, target_y, plate_height_deg
     global _rx_buf, _rx_state
 
     while ser.in_waiting > 0:
@@ -92,63 +113,22 @@ def receive_packets():
                             current_pattern      = new_pattern
                             current_pattern_text = PATTERN_NAMES.get(new_pattern, "UNKNOWN")
                             pattern_start_time   = time.time()
+                    elif p_type == PACKET_TYPE_TARGET_POS and p_size == 8:
+                        target_x, target_y = struct.unpack('<ff', bytes(payload))
+                    elif p_type == PACKET_TYPE_TARGET_POS and p_size == 12:
+                        target_x, target_y, plate_height_deg = struct.unpack('<fff', bytes(payload))
 
                 _rx_state = 0
                 _rx_buf   = bytearray()
 
 # --- CAMERA CONFIG ---
-def load_hsv(filename="hsv_values.txt"):
-    try:
-        with open(filename, 'r') as f:
-            lines = [line.strip() for line in f if line.strip()]
-            return (np.array([int(x) for x in lines[0].split(',')]),
-                    np.array([int(x) for x in lines[1].split(',')]))
-    except Exception:
-        return np.array([106, 131, 57]), np.array([123, 255, 165])
-
-LOWER_HSV, UPPER_HSV  = load_hsv()
-REAL_BALL_DIAMETER_MM = 40.0
-WIDTH, HEIGHT         = 640, 480
-
-try:
-    with np.load('cam_calib_fisheye.npz') as data:
-        K_fisheye, D_fisheye = data['K'], data['D']
-except Exception:
-    print("No calibration data found.")
-    exit()
-
-new_K = cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(
-    K_fisheye, D_fisheye, (WIDTH, HEIGHT), np.eye(3), balance=1.0)
-fx, fy = new_K[0, 0], new_K[1, 1]
-cx, cy = new_K[0, 2], new_K[1, 2]
-map1, map2 = cv2.fisheye.initUndistortRectifyMap(
-    K_fisheye, D_fisheye, np.eye(3), new_K, (WIDTH, HEIGHT), cv2.CV_16SC2)
-
-picam2 = Picamera2()
-config = picam2.create_preview_configuration(
-    main={"size": (WIDTH, HEIGHT), "format": "BGR888"})
-picam2.configure(config)
-picam2.set_controls({
-    "FrameDurationLimits": (int(1e6/60), int(1e6/60)),
-    "ExposureTime": 20000,
-    "AnalogueGain": 2.0,
-    "AeEnable":  False,
-    "AwbEnable": False
-})
-picam2.start()
-kernel = np.ones((3, 3), np.uint8)
+map1, map2, new_K = load_undistort()
+picam2  = start_camera()
+tracker = create_tracker(new_K)
 
 send_packet(PACKET_TYPE_START, b'')
-isStarted = False
-
-# --- TRACKING VARIABLES ---
-prev_time = time.time()
-prev_smooth_x, prev_smooth_y, prev_smooth_z = 0.0, 0.0, 0.0
-vx, vy, vz = 0.0, 0.0, 0.0
-POS_ALPHA      = 0.6
-VELOCITY_ALPHA = 0.15
-DEADBAND       = 1.5
-first_detection = True
+isStarted   = False
+show_mask   = False
 
 # ─────────────────────────────────────────────────────────────
 # PATTERN VISUALIZER
@@ -156,7 +136,13 @@ first_detection = True
 PANEL_SIZE   = 170
 PANEL_MARGIN = 10
 PANEL_STEPS  = 200
-MAX_EXTENT   = 70.0
+MAX_EXTENT   = 70.0 * UNIT_SCALE
+# Teensy pattern sizes (main.cpp), same units as the ball position
+CIRCLE_R     = 50.0 * PATTERN_SCALE
+STAR_R_OUT   = 60.0 * PATTERN_SCALE
+STAR_R_IN    = 25.0 * PATTERN_SCALE
+FIG8_RX      = 60.0 * PATTERN_SCALE
+FIG8_RY      = 30.0 * PATTERN_SCALE
 
 def mm_to_panel_px(x_mm, y_mm):
     half = PANEL_SIZE / 2.0
@@ -172,19 +158,19 @@ def get_pattern_outline(pat):
         omega = (2.0 * math.pi) / 5.0
         for i in range(PANEL_STEPS + 1):
             t = (i / PANEL_STEPS) * 5.0
-            pts.append((50.0 * math.cos(omega * t),
-                        50.0 * math.sin(omega * t)))
+            pts.append((CIRCLE_R * math.cos(omega * t),
+                        CIRCLE_R * math.sin(omega * t)))
     elif pat == 2:
         for i in range(11):
             angle = (math.pi / 2.0) + i * (math.pi / 5.0)
-            r     = 60.0 if (i % 2 == 0) else 25.0
+            r     = STAR_R_OUT if (i % 2 == 0) else STAR_R_IN
             pts.append((r * math.cos(angle), r * math.sin(angle)))
     elif pat == 3:
         omega = (2.0 * math.pi) / 6.0
         for i in range(PANEL_STEPS + 1):
             t = (i / PANEL_STEPS) * 6.0
-            pts.append((60.0 * math.sin(omega * t),
-                        30.0 * math.sin(2.0 * omega * t)))
+            pts.append((FIG8_RX * math.sin(omega * t),
+                        FIG8_RY * math.sin(2.0 * omega * t)))
     return [mm_to_panel_px(p[0], p[1]) for p in pts]
 
 def get_pattern_dot(pat, t):
@@ -192,8 +178,8 @@ def get_pattern_dot(pat, t):
         return mm_to_panel_px(0.0, 0.0)
     elif pat == 1:
         omega = (2.0 * math.pi) / 5.0
-        return mm_to_panel_px(50.0 * math.cos(omega * t),
-                               50.0 * math.sin(omega * t))
+        return mm_to_panel_px(CIRCLE_R * math.cos(omega * t),
+                               CIRCLE_R * math.sin(omega * t))
     elif pat == 2:
         period   = 10.0
         mod_t    = math.fmod(t, period)
@@ -203,7 +189,7 @@ def get_pattern_dot(pat, t):
         next_idx = (idx + 1) % 10
         def gp(i):
             a = (math.pi / 2.0) + i * (math.pi / 5.0)
-            r = 60.0 if (i % 2 == 0) else 25.0
+            r = STAR_R_OUT if (i % 2 == 0) else STAR_R_IN
             return r * math.cos(a), r * math.sin(a)
         x1, y1 = gp(idx)
         x2, y2 = gp(next_idx)
@@ -211,8 +197,8 @@ def get_pattern_dot(pat, t):
                                y1 + (y2 - y1) * progress)
     elif pat == 3:
         omega = (2.0 * math.pi) / 6.0
-        return mm_to_panel_px(60.0 * math.sin(omega * t),
-                               30.0 * math.sin(2.0 * omega * t))
+        return mm_to_panel_px(FIG8_RX * math.sin(omega * t),
+                               FIG8_RY * math.sin(2.0 * omega * t))
     return mm_to_panel_px(0.0, 0.0)
 
 _cached_outline_pat = -1
@@ -262,7 +248,9 @@ def draw_pattern_panel(frame, t_elapsed, ball_x_mm=None, ball_y_mm=None, ball_fo
                       color=(0, 160, 255), thickness=1, lineType=cv2.LINE_AA)
 
     # --- animated target dot (green) ---
-    dot = to_frame(get_pattern_dot(current_pattern, t_elapsed))
+    # the Teensy's actual target (TARGET_POS packets): recomputing it here from the
+    # Pi's clock put it out of phase, e.g. on the opposite side of the figure-8
+    dot = to_frame(mm_to_panel_px(target_x, target_y))
     if current_pattern == 0:
         cv2.drawMarker(frame, dot, (0, 255, 180), cv2.MARKER_CROSS, 12, 1, cv2.LINE_AA)
     else:
@@ -290,54 +278,11 @@ try:
         raw_frame = picam2.capture_array()
         frame     = cv2.remap(raw_frame, map1, map2, cv2.INTER_LINEAR)
 
-        hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, LOWER_HSV, UPPER_HSV)
-        mask = cv2.erode(mask,  kernel, iterations=1)
-        mask = cv2.dilate(mask, kernel, iterations=2)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        is_found = 0
-        X_real, Y_real, Z_depth = 0.0, 0.0, 0.0
-        draw_x, draw_y, radius  = 0, 0, 0
-
-        if contours:
-            c = max(contours, key=cv2.contourArea)
-            ((x, y), radius_f) = cv2.minEnclosingCircle(c)
-            if radius_f > 5:
-                is_found = 1
-                draw_x, draw_y, radius = int(x), int(y), int(radius_f)
-                Z_pinhole        = (fx * REAL_BALL_DIAMETER_MM) / (radius_f * 2)
-                dist_from_center = math.sqrt((x - cx)**2 + (y - cy)**2)
-                Z_depth          = Z_pinhole * math.sqrt(1 + (dist_from_center / fx)**2)
-                X_real           = ((x - cx) * Z_depth) / fx
-                Y_real           = ((y - cy) * Z_depth) / fy
-
-        curr_time = time.time()
-        dt = curr_time - prev_time
-        if dt <= 0: dt = 0.016
-
-        if is_found:
-            if first_detection:
-                prev_smooth_x, prev_smooth_y, prev_smooth_z = X_real, Y_real, Z_depth
-                first_detection = False
-            smooth_x = POS_ALPHA * X_real  + (1.0 - POS_ALPHA) * prev_smooth_x
-            smooth_y = POS_ALPHA * Y_real  + (1.0 - POS_ALPHA) * prev_smooth_y
-            smooth_z = POS_ALPHA * Z_depth + (1.0 - POS_ALPHA) * prev_smooth_z
-            dx = smooth_x - prev_smooth_x
-            dy = smooth_y - prev_smooth_y
-            dz = smooth_z - prev_smooth_z
-            if abs(dx) < DEADBAND: dx = 0.0
-            if abs(dy) < DEADBAND: dy = 0.0
-            if abs(dz) < DEADBAND: dz = 0.0
-            vx = VELOCITY_ALPHA * (dx / dt) + (1.0 - VELOCITY_ALPHA) * vx
-            vy = VELOCITY_ALPHA * (dy / dt) + (1.0 - VELOCITY_ALPHA) * vy
-            vz = VELOCITY_ALPHA * (dz / dt) + (1.0 - VELOCITY_ALPHA) * vz
-            prev_smooth_x, prev_smooth_y, prev_smooth_z = smooth_x, smooth_y, smooth_z
-        else:
-            vx *= 0.8; vy *= 0.8; vz *= 0.8
-            first_detection = True
-
-        prev_time = curr_time
+        ball = tracker.update(frame)
+        is_found = 1 if ball.found else 0
+        X_real, Y_real, Z_depth = ball.x, ball.y, ball.z
+        vx, vy, vz = ball.vx, ball.vy, ball.vz
+        draw_x, draw_y, radius = int(ball.u), int(ball.v), int(ball.r)
 
         if is_found and not isStarted:
             send_packet(PACKET_TYPE_START, b'')
@@ -350,11 +295,15 @@ try:
             send_packet(PACKET_TYPE_BALL_DATA, ball_payload)
 
         # GUI
+        clean_frame = frame.copy()   # undrawn, for the 'd' snapshot
+        cv2.circle(frame, (int(tracker.roi[0]), int(tracker.roi[1])), int(tracker.roi[2]),
+                   (0, 200, 255), 1)
         if is_found:
-            cv2.circle(frame, (draw_x, draw_y), radius, (0, 255, 0), 2)
+            ring_col = (0, 200, 255) if ball.coasting else (0, 255, 0)
+            cv2.circle(frame, (draw_x, draw_y), radius, ring_col, 2)
             cv2.circle(frame, (draw_x, draw_y), 5, (0, 0, 255), -1)
 
-        status = "FOUND" if is_found else "LOST"
+        status = ("PREDICTED" if ball.coasting else "FOUND") if is_found else "LOST"
         col    = (0, 255, 0) if is_found else (0, 0, 255)
         cv2.putText(frame, f"Status: {status}", (20, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, col, 2)
@@ -364,6 +313,12 @@ try:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         cv2.putText(frame, f"Z: {Z_depth:.1f} mm", (20, 120),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        if plate_height_deg is not None:
+            at_limit = (plate_height_deg <= PLATE_HEIGHT_MIN_DEG + 0.05 or
+                        plate_height_deg >= PLATE_HEIGHT_MAX_DEG - 0.05)
+            cv2.putText(frame, f"Plate: {plate_height_deg:.1f} deg" + (" (limit)" if at_limit else ""),
+                        (20, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                        (0, 0, 255) if at_limit else (255, 255, 255), 2)
         cv2.putText(frame, f"Vx: {vx:.1f}", (20, 160),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
         cv2.putText(frame, f"Vy: {vy:.1f}", (20, 190),
@@ -375,7 +330,7 @@ try:
         hints = [
             "1:CENTER  2:CIRCLE",
             "3:STAR    4:FIG.8",
-            "5:CYCLE   ESC:quit",
+            "5:CYCLE   M:mask  D:snapshot  ESC:quit",
         ]
         for hi, htxt in enumerate(hints):
             cv2.putText(frame, htxt,
@@ -388,10 +343,30 @@ try:
                            ball_found=bool(is_found))
 
         cv2.imshow("Ball Tracking", frame)
+        if log_file is not None:
+            now = time.time()
+            log_file.write(f"{now:.3f},{is_found},{X_real:.1f},{Y_real:.1f},{Z_depth:.1f},"
+                           f"{vx:.0f},{vy:.0f},{target_x:.1f},{target_y:.1f},{current_pattern},"
+                           f"{plate_height_deg if plate_height_deg is not None else float('nan'):.2f}\n")
+            if now - last_log_frame >= 2.0:
+                last_log_frame = now
+                cv2.imwrite(os.path.join(LOG_DIR, "latest.jpg"), frame)
+        if show_mask and tracker.mask is not None:
+            cv2.imshow("Mask", tracker.mask)
 
         key = cv2.waitKey(1) & 0xFF
         if key == 27:
             break
+        elif key == ord('m'):
+            show_mask = not show_mask
+            if not show_mask:
+                cv2.destroyWindow("Mask")
+        elif key == ord('d'):
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            cv2.imwrite(f"snapshot_{stamp}_frame.png", clean_frame)
+            if tracker.mask is not None:
+                cv2.imwrite(f"snapshot_{stamp}_mask.png", tracker.mask)
+            print(f"Saved snapshot_{stamp}_*.png")
         elif key == ord('1'):
             send_pattern_to_teensy(0)
             current_pattern      = 0
@@ -421,5 +396,12 @@ except KeyboardInterrupt:
 finally:
     picam2.stop()
     if 'ser' in locals() and ser.is_open:
+        # tell the Teensy the ball is gone, or it keeps acting on the last position
+        # (the I term then winds the plate up to its tilt limit)
+        for _ in range(3):
+            send_packet(PACKET_TYPE_BALL_DATA, struct.pack('<Bffffff', 0, 0, 0, 0, 0, 0, 0))
+        ser.flush()
         ser.close()
+    if log_file is not None:
+        log_file.close()
     cv2.destroyAllWindows()
