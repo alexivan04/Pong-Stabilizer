@@ -83,19 +83,20 @@ void sendPatternChange(uint8_t patternIndex) {
     Serial1.write(END_BYTE);
 }
 
-void sendTargetPos(float tx, float ty) {
-    uint8_t payload[8];
+void sendTargetPos(float tx, float ty, float heightDeg) {
+    uint8_t payload[12];
     memcpy(payload,     &tx, 4);
     memcpy(payload + 4, &ty, 4);
-    uint8_t payload_size = 8;
+    memcpy(payload + 8, &heightDeg, 4);   // plate height setting, deg above the low stop
+    uint8_t payload_size = 12;
 
     byte checksum = PACKET_TYPE_TARGET_POS ^ payload_size;
-    for (int i = 0; i < 8; i++) checksum ^= payload[i];
+    for (int i = 0; i < 12; i++) checksum ^= payload[i];
 
     Serial1.write(START_BYTE);
     Serial1.write(PACKET_TYPE_TARGET_POS);
     Serial1.write(payload_size);
-    Serial1.write(payload, 8);
+    Serial1.write(payload, 12);
     Serial1.write(checksum);
     Serial1.write(END_BYTE);
 }

@@ -1,9 +1,9 @@
 #include "inverseKinematics.h"
 #include "uartComm.h" 
 
-volatile float Kp = 0.149f;
-volatile float Ki = 0.112f;
-volatile float Kd = 0.068f; 
+volatile float Kp = 0.149f / UNIT_SCALE;
+volatile float Ki = 0.112f / UNIT_SCALE;
+volatile float Kd = 0.068f / UNIT_SCALE;
 
 float errX_int = 0, lastErrX = 0;
 float errY_int = 0, lastErrY = 0;
@@ -20,6 +20,12 @@ float smoothedDerivY = 0;
 float lastFilteredX = 0;
 float lastFilteredY = 0;
 
+// Target velocity for the D term, filtered exactly like the ball so both
+// velocities have the same lag and their difference is the real tracking error
+float filteredTX = 0, filteredTY = 0;
+float lastFilteredTX = 0, lastFilteredTY = 0;
+float smoothedTargetDerivX = 0, smoothedTargetDerivY = 0;
+
 void resetPID() {
     errX_int = 0;
     lastErrX = 0;
@@ -31,11 +37,14 @@ void resetPID() {
     smoothedDerivY = 0;
     lastFilteredX = 0;
     lastFilteredY = 0;
+    filteredTX = filteredTY = 0;
+    lastFilteredTX = lastFilteredTY = 0;
+    smoothedTargetDerivX = smoothedTargetDerivY = 0;
 }
 
 // PLATE BOUNDARY LIMITS (in mm)
-const float PLATE_LIMIT_X = 180.0f; 
-const float PLATE_LIMIT_Y = 180.0f;
+const float PLATE_LIMIT_X = 180.0f * UNIT_SCALE;
+const float PLATE_LIMIT_Y = 180.0f * UNIT_SCALE;
 
 float calculateArmAngle(int i, float pitch, float roll) {
     float Zi = h0 + Rp * (sin(roll) * cos(servo_gamma[i]) + sin(pitch) * sin(servo_gamma[i]));
@@ -70,6 +79,8 @@ void computeMotorAngles(float targetX, float targetY, volatile float *motorAngle
     // EMA Filter
     filteredX = (ALPHA * rawX) + ((1.0f - ALPHA) * filteredX);
     filteredY = (ALPHA * rawY) + ((1.0f - ALPHA) * filteredY);
+    filteredTX = (ALPHA * targetX) + ((1.0f - ALPHA) * filteredTX);
+    filteredTY = (ALPHA * targetY) + ((1.0f - ALPHA) * filteredTY);
 
     float errorX = filteredX - targetX;
     float errorY = filteredY - targetY;
@@ -81,26 +92,36 @@ void computeMotorAngles(float targetX, float targetY, volatile float *motorAngle
     if (dt <= 0.0f || dt > 0.1f) dt = 0.01f; 
     lastTime = now;
 
-    // --- DERIVATIVE ON MEASUREMENT APPLIED HERE ---
-    
+    // --- D TERM: BALL VELOCITY RELATIVE TO THE TARGET'S ---
+    // Still derivative on measurement (no kick when the pattern jumps), but a
+    // ball that moves along with a moving target isn't braked any more; braking
+    // it made the ball lag the circle/figure-8 by ~0.4 s and swing wide.
+    // With a still target (CENTER) this is the same as before.
+
     // X Axis PID (Roll / Left-Right Tilt)
-    errX_int = constrain(errX_int + (errorX * dt), -50.0f, 50.0f);
-    // Use the actual ball movement, NOT the error movement for the D term
+    errX_int = constrain(errX_int + (errorX * dt), -50.0f * UNIT_SCALE, 50.0f * UNIT_SCALE);
     float rawDerivX = (filteredX - lastFilteredX) / dt;
     smoothedDerivX = (0.2f * rawDerivX) + (0.8f * smoothedDerivX);
-    float roll_deg = (pidValues.P * errorX) + (pidValues.I * errX_int) + (pidValues.D * smoothedDerivX);
-    
+    float rawTargetDerivX = (filteredTX - lastFilteredTX) / dt;
+    smoothedTargetDerivX = (0.2f * rawTargetDerivX) + (0.8f * smoothedTargetDerivX);
+    float roll_deg = (pidValues.P * errorX) + (pidValues.I * errX_int)
+                   + (pidValues.D * (smoothedDerivX - smoothedTargetDerivX));
+
     lastFilteredX = filteredX;
+    lastFilteredTX = filteredTX;
     lastErrX = errorX;
 
     // Y Axis PID (Pitch / Front-Back Tilt)
-    errY_int = constrain(errY_int + (errorY * dt), -50.0f, 50.0f);
-    // Use the actual ball movement, NOT the error movement for the D term
+    errY_int = constrain(errY_int + (errorY * dt), -50.0f * UNIT_SCALE, 50.0f * UNIT_SCALE);
     float rawDerivY = (filteredY - lastFilteredY) / dt;
     smoothedDerivY = (0.2f * rawDerivY) + (0.8f * smoothedDerivY);
-    float pitch_deg = (pidValues.P * errorY) + (pidValues.I * errY_int) + (pidValues.D * smoothedDerivY);
-    
+    float rawTargetDerivY = (filteredTY - lastFilteredTY) / dt;
+    smoothedTargetDerivY = (0.2f * rawTargetDerivY) + (0.8f * smoothedTargetDerivY);
+    float pitch_deg = (pidValues.P * errorY) + (pidValues.I * errY_int)
+                    + (pidValues.D * (smoothedDerivY - smoothedTargetDerivY));
+
     lastFilteredY = filteredY;
+    lastFilteredTY = filteredTY;
     lastErrY = errorY;
 
     // Constrain the maximum tilt to 15 degrees to prevent mechanical crashes
@@ -108,10 +129,10 @@ void computeMotorAngles(float targetX, float targetY, volatile float *motorAngle
     roll_deg = constrain(roll_deg, -10.0f, 15.0f) * -1.0f;
 
     // --- LINEAR DEGREE MIXING ---
-    float base_angle = calculateArmAngle(0, 0.0f, 0.0f);
-    
-    motorAngles[0] = base_angle - pitch_deg + roll_deg; // M0: Right-Back
-    motorAngles[1] = base_angle + pitch_deg + roll_deg; // M1: Right-Front
-    motorAngles[2] = base_angle + pitch_deg - roll_deg; // M2: Left-Front
-    motorAngles[3] = base_angle - pitch_deg - roll_deg; // M3: Left-Back
+    // Tilt only, relative to the current plate height; main.cpp adds the
+    // height and keeps every arm inside its safe range.
+    motorAngles[0] = - pitch_deg + roll_deg; // M0: Right-Back
+    motorAngles[1] = + pitch_deg + roll_deg; // M1: Right-Front
+    motorAngles[2] = + pitch_deg - roll_deg; // M2: Left-Front
+    motorAngles[3] = - pitch_deg - roll_deg; // M3: Left-Back
 }
