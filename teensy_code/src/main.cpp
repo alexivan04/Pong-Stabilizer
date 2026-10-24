@@ -242,6 +242,9 @@ void runPongLoop() {
             float targetY = 0.0f;
             getTrajectoryTarget(targetX, targetY);
 
+            // Send target to Pi so minimap is perfectly in sync
+            sendTargetPos(targetX, targetY);
+
             computeMotorAngles(targetX, targetY, motorAngles);
 
             stepper_1.setTargetStep( DEG_TO_MOTOR_STEPS(motorAngles[0]));

@@ -9,7 +9,8 @@ const byte END_BYTE = 0xBB;
 const byte PACKET_TYPE_BALL_DATA = 1;
 const byte PACKET_TYPE_PID_UPDATE = 2;
 const byte PACKET_TYPE_START = 3;
-const byte PACKET_TYPE_PATTERN_CHANGE = 4;  // NEW: Teensy -> Pi
+const byte PACKET_TYPE_PATTERN_CHANGE = 4;  // bidirectional: pattern index
+const byte PACKET_TYPE_TARGET_POS     = 5;  // Teensy -> Pi: current target (tx, ty)
 
 struct __attribute__((packed)) BallData {
   uint8_t is_found;
@@ -29,6 +30,7 @@ extern PIDValues pidValues;
 extern boolean isStarted;
 
 void checkSerial();
-void sendPatternChange(uint8_t patternIndex);  // NEW
+void sendPatternChange(uint8_t patternIndex);
+void sendTargetPos(float tx, float ty);
 
 #endif // UART_COMM_H
