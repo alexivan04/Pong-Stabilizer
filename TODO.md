@@ -12,6 +12,7 @@
 - **Light ring.** Constant light, independent of the room. Not next to the camera under the plate
   (reflects off the acrylic into the lens); around the plate edge, angled in, or with crossed polarizers.
 - **Pi screen.** Official 7" touch display on the Pi 5's second MIPI port; GUI needs bigger buttons.
+  Check the 5V step-down budget (Pi 5 A recommended, display ~0.5 A).
 - **Hide the cables.** Keep the camera ribbon away from the motor wires.
 
 ## Vision
@@ -19,6 +20,9 @@
 - **Plate detection from the black dots in the white L's** as the real reference instead of the
   ball: plate height and tilt measured directly, ball size then measurable (balls of other sizes).
   Continues the paused trial on branch `experiment/plate-markers` (85 % valid detections).
+  Keep dots, not ArUco: a 4x4 tag needs ~37 mm at ~0.65 px/mm (only ~20 mm between the screws)
+  and many colour changes to print. Improve contrast instead: white L with a black dot printed
+  into the arm, as large as the space allows.
 
 ## Software
 
