@@ -215,7 +215,7 @@ def main():
     def pm(name, k, fmt="{:.1f}"):
         m, s = agg[name][k]
         if k == "settling_s" and m == 0 and s == 0:
-            return "$0$"
+            return "--"   # no transient above the steady-state error; see the caption
         return f"${fmt.format(m)} \\pm {fmt.format(s)}$"
 
     lines = [r"\begin{table}[H]", r"\centering",
@@ -227,7 +227,8 @@ def main():
                      f"{pm(name, 'rms_mm')} & {pm(name, 'p95_mm')} & {pm(name, 'max_mm')} \\\\ \\hline")
     lines += [r"\end{tabularx}",
               r"\caption{\textit{Settling time and steady-state tracking error of the final configuration "
-              r"(mean $\pm$ standard deviation over the runs).}}",
+              r"(mean $\pm$ standard deviation over the runs); --: no transient above the pattern's own "
+              r"steady-state error (the STAR$\to$FIGURE 8 switch stayed inside the settling band).}}",
               r"\label{tab:tracking_error}", r"\end{table}", ""]
 
     lines += [r"\begin{table}[H]", r"\centering",
@@ -267,10 +268,12 @@ def main():
         for name in ["CENTER", "CIRCLE", "STAR", "FIGURE 8"]:
             r = results[run].get(name)
             if r:
-                lines.append(f"{run} & {name} & {r['settling_s']:.2f} & {r['mean_mm']:.1f} & {r['rms_mm']:.1f} & "
+                st = f"{r['settling_s']:.2f}" if r['settling_s'] > 0 else "--"
+                lines.append(f"{run} & {name} & {st} & {r['mean_mm']:.1f} & {r['rms_mm']:.1f} & "
                              f"{r['p95_mm']:.1f} & {r['max_mm']:.1f} \\\\ \\hline")
     lines += [r"\end{tabularx}",
-              r"\caption{\textit{Settling time and steady-state tracking error for each run.}}",
+              r"\caption{\textit{Settling time and steady-state tracking error for each run; --: no "
+              r"transient above the steady-state error.}}",
               r"\label{tab:per_run}", r"\end{table}"]
     # one file per table, so each can be \input where it belongs in the text
     text = "\n".join(lines) + "\n"
