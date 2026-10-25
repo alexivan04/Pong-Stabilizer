@@ -216,6 +216,8 @@ def analyse_steps(d, a, e, axis):
             k = np.flatnonzero(curve >= level)
             return float(T[k[0]]) if len(k) else np.nan
         err_mm = np.abs(pos[w] - new)
+        # settled: inside the band for the last second of the window and from then on
+        settled = lambda band: np.all(err_mm[T > T[-1] - 1.0] <= band)
         outside = np.flatnonzero(err_mm > BAND_MM)
         outside5 = np.flatnonzero(err_mm > 0.05 * 2 * STEP_MM)
         out.append(dict(
@@ -224,8 +226,8 @@ def analyse_steps(d, a, e, axis):
             delay=first(y, 0.5) - first(yt, 0.5),
             overshoot=float(max(0.0, (y.max() - 1)) * 100),
             overshoot_mm=float(max(0.0, (y.max() - 1)) * 2 * STEP_MM),
-            settle2=float(T[outside[-1]]) if len(outside) else 0.0,
-            settle5=float(T[outside5[-1]]) if len(outside5) else 0.0,
+            settle2=(float(T[outside[-1]]) if len(outside) else 0.0) if settled(BAND_MM) else np.nan,
+            settle5=(float(T[outside5[-1]]) if len(outside5) else 0.0) if settled(0.05 * 2 * STEP_MM) else np.nan,
             steady=float(np.mean(err_mm[T > T[-1] - 2.0])),
             cross_rms=float(np.sqrt(np.mean(other[w] ** 2)))))
     return out
@@ -367,26 +369,38 @@ def main():
             pm([c["p95"] for c in center]), pm([c["max"] for c in center]),
             pm([c["within5"] for c in center], "{:.0f}") + "\\,\\%", pm([c["noise"] for c in center], "{:.2f}")]],
           "c|X|X|X|X|X|X", "CENTER hold after the ball was placed at rest (60\\,s per run, first 5\\,s excluded).", "tab:test_center")
-    rows = []
-    for ax in ("x", "y"):
-        S = steps[ax]
-        rows.append([f"STEP\\_{ax.upper()}", str(len(S)), pm([s["rise"] for s in S], "{:.2f}"), pm([s["delay"] for s in S], "{:.2f}"),
-                     pm([s["overshoot"] for s in S], "{:.0f}") + "\\,\\%", pm([s["settle2"] for s in S], "{:.2f}"),
-                     pm([s["settle5"] for s in S], "{:.2f}"), pm([s["steady"] for s in S]), pm([s["cross_rms"] for s in S])])
-    table("tab_test_steps.tex", ["Axis", "Steps", "Rise 10--90\\% [s]", "Delay [s]", "Overshoot", "Settling $\\pm$2\\,mm [s]",
-                                 "Settling $\\pm$5\\% [s]", "Remaining error [mm]", "Cross-axis RMS [mm]"],
-          rows, "l|c|X|X|X|X|X|X|X",
-          f"Step response to {2*STEP_MM:.0f}\\,mm target steps (rate-limited to 120\\,mm/s, i.e.\\ a 0.5\\,s ramp); times from the start of the target ramp, delay between the 50\\,\\% points of target and ball.",
+    def settle(S, key):
+        v = np.array([s[key] for s in S], float)
+        ok = np.isfinite(v)
+        return f"${np.median(v[ok]):.1f}$ (settled: {ok.mean()*100:.0f}\\,\\%)" if ok.any() else "--"
+    SX, SY = steps["x"], steps["y"]
+    metric_rows = [
+        ("Steps", lambda S: str(len(S))),
+        ("Rise time 10--90\\,\\% [s]", lambda S: pm([s["rise"] for s in S], "{:.2f}")),
+        ("Delay at 50\\,\\% [s]", lambda S: pm([s["delay"] for s in S], "{:.2f}")),
+        ("Overshoot", lambda S: pm([s["overshoot"] for s in S], "{:.0f}") + "\\,\\%"),
+        ("Settling time to $\\pm$5\\,\\% (3\\,mm) [s], median", lambda S: settle(S, "settle5")),
+        ("Settling time to $\\pm$2\\,mm [s], median", lambda S: settle(S, "settle2")),
+        ("Remaining error, last 2\\,s [mm]", lambda S: pm([s["steady"] for s in S])),
+        ("Other axis, RMS [mm]", lambda S: pm([s["cross_rms"] for s in S])),
+    ]
+    table("tab_test_steps.tex", ["Metric", "STEP X", "STEP Y"],
+          [[name, fn(SX), fn(SY)] for name, fn in metric_rows], "X|l|l",
+          f"Step response to {2*STEP_MM:.0f}\\,mm target steps in campaign B (rate-limited to 120\\,mm/s, i.e.\\ a 0.5\\,s ramp); times from the start of the target ramp; settled: share of the steps that settled within the 8\\,s hold.",
           "tab:test_steps")
-    rows = []
-    for ph, P in pats.items():
-        rows.append([ph, str(len(P)), pm([p["settling"] for p in P]), pm([p["mean"] for p in P]), pm([p["p95"] for p in P]),
-                     pm([p["mean_nc"] for p in P]), pm([p["lag"] for p in P], "{:.2f}"), pm([p["amplitude"] for p in P], "{:.2f}"),
-                     pm([p["shape"] for p in P]), pm([p["contacts"] for p in P], "{:.1f}")])
-    table("tab_test_patterns.tex", ["Pattern", "Runs", "Settling [s]", "Mean [mm]", "P95 [mm]", "Mean w/o contacts [mm]",
-                                    "Lag [s]", "Amplitude ratio", "Shape dev. [mm]", "Screw contacts"],
-          rows, "l|c|X|X|X|X|X|X|X|X",
-          "Trajectory tracking, each pattern started from the ball at rest in CENTER; steady state 20--60\\,s; lag from the exposure time of each frame (camera delay removed).",
+    names = list(pats)
+    def pat_row(label, key, fmt="{:.1f}"):
+        return [label] + [pm([p[key] for p in pats[n]], fmt) for n in names]
+    rows = [pat_row("Settling time [s]", "settling"),
+            pat_row("Mean error [mm]", "mean"),
+            pat_row("Mean error without screw contacts [mm]", "mean_nc"),
+            pat_row("P95 error [mm]", "p95"),
+            pat_row("Lag [s]", "lag", "{:.2f}"),
+            pat_row("Amplitude ratio", "amplitude", "{:.2f}"),
+            pat_row("Shape deviation [mm]", "shape"),
+            pat_row("Screw contacts per run", "contacts")]
+    table("tab_test_patterns.tex", ["Metric"] + names, rows, "X|l|l|l",
+          "Trajectory tracking in campaign B (5 runs per pattern, each started from the ball at rest in CENTER); steady state 20--60\\,s; lag from the exposure time of each frame (camera delay removed); without screw contacts: excluding 0.3\\,s around each contact.",
           "tab:test_patterns")
     det = [t for t in taps if t.get("detected")]
     table("tab_test_disturb.tex", ["Taps", "Detected", "Peak deviation [mm]", "Time to peak [s]", f"Recovery to {TAP_RECOVER_MM:.0f}\\,mm [s]"],

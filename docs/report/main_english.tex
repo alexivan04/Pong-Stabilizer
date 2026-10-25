@@ -379,9 +379,9 @@ with the signs $(\sigma_i^{p}, \sigma_i^{r})$ equal to $(+1,+1)$, $(-1,+1)$, $(-
 \section{Mechanical Limitations and Constraints}
 For reasons of structural safety and to prevent collisions between links or the locking of joints (singularities), we implemented a strict software limitation of the tilt commands:
 \begin{equation}
-    -10^\circ \leq \theta_{pitch, roll} \leq 15^\circ
+    -12^\circ \leq \theta_{pitch, roll} \leq 15^\circ
 \end{equation}
-In addition, every arm command is limited to the range $5^\circ \leq \alpha_i \leq 40^\circ$ above the low stop, so that the arms never press against the stop, and the common height angle $\alpha_h$ is kept between $15^\circ$ and $30^\circ$, which leaves $10^\circ$ of tilt range on both sides.
+In addition, every arm command is limited to the range $5^\circ \leq \alpha_i \leq 40^\circ$ above the low stop, so that the arms never press against the stop, and the common height angle $\alpha_h$ is kept between $17^\circ$ and $30^\circ$, which leaves $12^\circ$ of tilt range below and $10^\circ$ above. With only $10^\circ$ below (the earlier setting), the lower arm reached its limit as soon as pitch and roll together asked for more than $10^\circ$, and stopped reacting.
 
 These constraints keep the system in a zone of relative linearity and prevent the motors from being forced into extreme positions. At the moment, the \textit{bouncing} function is disabled in order to protect the integrity of the rod-joint assembly under heavy dynamic loads, as it has not yet been tested sufficiently.
 
@@ -463,6 +463,8 @@ The main processing loop, implemented in \texttt{4\_headless\_track.py} (without
         X_{real} = \frac{(x_{px} - c_x) \cdot Z_{final}}{f_x}, \quad Y_{real} = \frac{(y_{px} - c_y) \cdot Z_{final}}{f_y}
     \end{equation}
 
+    \item \textbf{Plate-centered coordinates:} The positions are finally expressed relative to the center of the plate, which lies $(8.0, -1.2)$\,mm from the optical center of the camera (measured once from markers on the brackets, with the plate level). The CENTER target and all patterns are therefore centered on the plate.
+
     \item \textbf{Median filtering of the depth:} Because $X_{real}$ and $Y_{real}$ are proportional to $Z_{final}$, a single-frame error in the estimated radius would move the ball position and produce a false velocity. The depth is therefore passed through a \textbf{median filter}: the median of the last 15 frames (0.25\,s) is used to scale $X$ and $Y$, and the median of the last 5 frames is reported as $Z$. The median removes isolated outliers without smoothing real movements as strongly as an average.
 \end{enumerate}
 
@@ -521,6 +523,8 @@ Four distinct trajectories are defined, plus an automatic cycling mode:
     \item \textbf{FIGURE 8 (key 4):} A figure-eight-type trajectory (lemniscate), with a horizontal semi-axis of 60\,mm and a vertical one of 30\,mm, with a period of 6\,s.
     \item \textbf{CYCLE ALL (key 5):} The system automatically cycles through all four modes above, 25\,s each, with smooth transitions ensured by a target rate limiter of 120\,mm/s.
 \end{itemize}
+
+Two further patterns, \textbf{STEP X} and \textbf{STEP Y}, are used only by the automated test protocol (Chapter~\ref{chap:rezultate}): the target jumps between $-30$ and $+30$\,mm along one axis every 8\,s, through the same rate limiter.
 
 The synchronization of the visualization with the real execution is ensured by transmitting the current target position $(t_x, t_y)$ from the Teensy to the Raspberry Pi through a dedicated \texttt{PACKET\_TYPE\_TARGET\_POS} packet at every 5\,ms iteration. Thus, the green dot in the animation reflects exactly the coordinate followed by the PID controller.
 
@@ -581,12 +585,14 @@ The stability of a ``Ball and Plate'' system depends on the constancy of the sam
 \section{Safety Limitations (Software Constraints)}
 To protect the mechanical structure, the angles calculated by the PID are passed through a limiting block before being converted into arm commands (Section~\ref{sec:ik_linear}), and every arm command is limited to its safe range. This prevents reaching the mechanical limits of the joints in the case of violent movements or if the ball accidentally leaves the platform.
 
+An \textbf{edge guard} protects the ball itself: when it moves more than 85\,mm from the center of the plate, close to the edge and to the screws of the brackets, the target is moved back to the center (through the rate limiter) until the ball is again within 40\,mm; then the pattern continues.
+
 \section{Plate Height Control}
 \label{sec:height_control}
 
-The arm angles are measured from the mechanical low stop, so the arms must rest on the stop when the Raspberry Pi sends the \texttt{START} command. At startup the Teensy lifts all arms to $5^\circ$ in 1\,s, then raises them together at $2^\circ$/s to $15^\circ$ while the balancing loop is already active, so the ball can be placed on the platform immediately.
+The arm angles are measured from the mechanical low stop, so the arms must rest on the stop when the Raspberry Pi sends the \texttt{START} command. At startup the Teensy lifts all arms to $5^\circ$ in 1\,s, then raises them together at $2^\circ$/s to $17^\circ$ while the balancing loop is already active, so the ball can be placed on the platform immediately.
 
-From there, the common height angle $\alpha_h$ is controlled from the measured depth of the ball: since the camera is under the platform, a higher platform increases $Z$. The Teensy keeps the ball at $Z = 195 \pm 4$\,mm by moving $\alpha_h$ at $0.05^\circ$/s per millimeter of error, at most $2^\circ$/s, within the range $15^\circ$--$30^\circ$. The depth is low-pass filtered and only used while the ball is within 75\,mm of the center, where its estimate is reliable. The height setting is reported to the Raspberry Pi in the \texttt{TARGET\_POS} packet.
+From there, the common height angle $\alpha_h$ is controlled from the measured depth of the ball: since the camera is under the platform, a higher platform increases $Z$. The Teensy keeps the ball at $Z = 195 \pm 4$\,mm by moving $\alpha_h$ at $0.05^\circ$/s per millimeter of error, at most $2^\circ$/s, within the range $17^\circ$--$30^\circ$. The depth is low-pass filtered and only used while the ball is within 75\,mm of the center, where its estimate is reliable. The height setting is reported to the Raspberry Pi in the \texttt{TARGET\_POS} packet.
 
 \chapter{Experimental Results and Conclusions}
 \label{chap:rezultate}
@@ -594,11 +600,18 @@ From there, the common height angle $\alpha_h$ is controlled from the measured d
 \section{Experimental Method}
 \label{sec:exp_method}
 
-We measured the tracking performance of the \textbf{OctoBouncer} on the physical system in its final configuration: \textbf{median-filtered depth}, a \textbf{derivative term acting on the velocity of the ball relative to the target}, and \textbf{closed-loop control of the plate height}. Four runs (runs 7--10, recorded on 24 October 2026) were made in the automatic cycling mode (\textbf{CYCLE ALL}), in which the controller follows each pattern for 25\,s: CENTER, CIRCLE, STAR and FIGURE 8. The ball was placed on the plate at start-up and the system was not touched afterwards. A fifth run (run 1), recorded with the same vision system but before the control changes (derivative term on the ball position only, depth not filtered), serves as the reference for the comparison in Section~\ref{sec:exp_before_after}.
+We measured the performance of the \textbf{OctoBouncer} on the physical system in two test campaigns. Both use the final control configuration: \textbf{median-filtered depth}, a \textbf{derivative term acting on the velocity of the ball relative to the target}, and \textbf{closed-loop control of the plate height}.
+
+\begin{itemize}
+    \item \textbf{Campaign A (24 October 2026):} four runs (runs 7--10) in the automatic cycling mode (\textbf{CYCLE ALL}), in which the controller follows each pattern for 25\,s: CENTER, CIRCLE, STAR and FIGURE 8. The ball was placed on the plate at start-up and the system was not touched afterwards. A fifth run (run 1), recorded with the same vision system but before the control changes (derivative term on the ball's own velocity, depth not filtered), serves as the reference for the comparison of the two derivative terms in Section~\ref{sec:exp_before_after}.
+    \item \textbf{Campaign B (25 October 2026):} an automated test protocol (\texttt{5\_test\_runner.py}) ran five times in a row, 42.6\,min and 153{,}380 frames at 60\,fps in total. Each run consists of 60\,s in CENTER, 64\,s of target steps along each axis (Section~\ref{sec:exp_steps}), 60\,s of each pattern and five light taps on the ball held in CENTER (Section~\ref{sec:exp_disturb}). Every test starts from the ball at rest after 10\,s in CENTER, so all transitions are the same. The ball fell off once and was put back; the interrupted phase was repeated automatically.
+\end{itemize}
+
+Campaign B differs from campaign A in three details, introduced between the two: the positions are relative to the center of the plate instead of the camera (Section~\ref{sec:vision}), the edge guard is active, and the tilt range is that of Section~\ref{sec:ik_linear} (in campaign A: $-10^\circ$ to $15^\circ$, and a minimum height of $15^\circ$). Only the final derivative term was tested in campaign B.
 
 In these runs the ball positions are expressed in true millimeters. The HSV pipeline of Section~\ref{sec:vision} reports about $1/1.4$ of the true distances, because the dilated mask overestimates the apparent radius of the ball; the PID gains of Chapter~\ref{chap:control} were therefore divided by the same factor 1.4, so that the controller behaves identically.
 
-For every camera frame (\textbf{60 Hz}) the tracking script on the Raspberry Pi 5 logs the measured ball position $\mathbf{p}_{ball}(t)$ and the target $\mathbf{p}_{target}(t)$ that the Teensy 4.1 reports through the \texttt{TARGET\_POS} packet every 5\,ms, i.e.\ exactly the set-point used by the PID controller. All coordinates are in millimeters in the camera frame. The tracking error is defined as:
+For every camera frame (\textbf{60 Hz}) the tracking script on the Raspberry Pi 5 logs the measured ball position $\mathbf{p}_{ball}(t)$ and the target $\mathbf{p}_{target}(t)$ that the Teensy 4.1 reports through the \texttt{TARGET\_POS} packet every 5\,ms, i.e.\ exactly the set-point used by the PID controller. All coordinates are in millimeters, relative to the camera's optical center in campaign A and to the center of the plate in campaign B. In campaign B every frame also carries its exposure time (the camera's \texttt{SensorTimestamp}); the ball position is evaluated at that instant and the target is interpolated to it, so the delay between exposure and processing (25.3\,ms, median) does not appear as lag. The tracking error is defined as:
 \begin{equation}
     e(t) = \lVert \mathbf{p}_{ball}(t) - \mathbf{p}_{target}(t) \rVert
 \end{equation}
@@ -609,7 +622,11 @@ The following quantities were computed for each pattern phase:
     \item \textbf{Settling time ($t_s$):} The time after the pattern switch from which the 1\,s moving RMS of $e(t)$ stays below $1.1$ times the largest 1\,s moving RMS observed in the steady-state window. A value of zero means that the switch produced no error transient larger than the pattern's own steady-state error.
     \item \textbf{Lag:} The time shift of the measured path that minimizes its mean squared distance to the target (positive: the ball is behind the target; negative: ahead of it).
     \item \textbf{Shape deviation and amplitude ratio:} The mean distance of the measured path from the ideal curve, and the ratio between the ball's mean distance from the center and the target's.
+    \item \textbf{Step response} (campaign B): for each 60\,mm step, the rise time from 10 to 90\,\% of the step, the delay between the 50\,\% points of target and ball, the overshoot, and the settling time to $\pm$5\,\% of the step (3\,mm) and to $\pm$2\,mm, measured from the start of the target ramp.
+    \item \textbf{Disturbance rejection} (campaign B): the largest distance of the ball from the center after a tap, and the time until it stays within 5\,mm of the center for at least 1\,s.
 \end{itemize}
+
+In campaign B the steady state of the patterns is the window from 20 to 60\,s after the start, and CENTER is evaluated from 5\,s after the start.
 
 Two checks support the validity of the measurement. First, the commanded target coincides with the mathematical trajectories of Section~\ref{sec:exp_traj} (maximum deviation $0.07$\,mm), so the target rate limiter is not active in steady state and the comparison with the ideal curves is exact. Second, while the ball is held at the center, the high-frequency scatter of the measured position (deviation from its 0.25\,s moving average) is $0.57 \pm 0.12$\,mm RMS, an order of magnitude below the tracking errors reported below. The ball path is measured by the same vision system that closes the control loop; no independent ground-truth sensor was available.
 
@@ -654,6 +671,33 @@ FIGURE 8 & $0.05 \pm 0.02$ & $18.5 \pm 1.4$ & $13.7 \pm 1.1$ & $1.31 \pm 0.03$ \
 \label{tab:lag}
 \end{table}
 
+Campaign B repeats the three patterns five times each, always starting from the ball at rest (Table~\ref{tab:test_patterns}, Figure~\ref{fig:test_patterns}). The mean errors, \textbf{14.2\,mm (circle), 14.6\,mm (star) and 16.5\,mm (figure 8)}, are practically those of campaign A, and the spread between the five runs is only 0.5--1.0\,mm. With the exposure time of each frame the lag is free of the camera delay: the ball is 0.08\,s ahead of the target on the circle, 0.11\,s behind on the star and 0.03\,s behind on the figure 8; the amplitude ratios (1.24, 1.09 and 1.29) confirm the outward deviation found in campaign A.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{|X|l|l|l|}
+\hline
+\textbf{Metric} & \textbf{CIRCLE} & \textbf{STAR} & \textbf{FIGURE 8} \\ \hline
+Settling time [s] & $2.1 \pm 1.4$ & $1.6 \pm 3.2$ & $0.5 \pm 1.1$ \\ \hline
+Mean error [mm] & $14.2 \pm 0.5$ & $14.6 \pm 1.0$ & $16.5 \pm 0.6$ \\ \hline
+Mean error without screw contacts [mm] & $14.2 \pm 0.5$ & $14.5 \pm 1.1$ & $15.7 \pm 0.8$ \\ \hline
+P95 error [mm] & $23.4 \pm 1.0$ & $27.8 \pm 2.0$ & $28.8 \pm 1.3$ \\ \hline
+Lag [s] & $-0.08 \pm 0.01$ & $0.11 \pm 0.02$ & $0.03 \pm 0.01$ \\ \hline
+Amplitude ratio & $1.24 \pm 0.01$ & $1.09 \pm 0.02$ & $1.29 \pm 0.01$ \\ \hline
+Shape deviation [mm] & $12.2 \pm 0.5$ & $7.3 \pm 0.5$ & $12.6 \pm 0.4$ \\ \hline
+Screw contacts per run & $0.4 \pm 0.5$ & $2.0 \pm 1.1$ & $12.4 \pm 2.9$ \\ \hline
+\end{tabularx}
+\caption{\textit{Trajectory tracking in campaign B (5 runs per pattern, each started from the ball at rest in CENTER); steady state 20--60\,s; lag from the exposure time of each frame (camera delay removed); without screw contacts: excluding 0.3\,s around each contact.}}
+\label{tab:test_patterns}
+\end{table}
+
+\begin{figure}[H]
+   \centering
+   \includegraphics[width=\textwidth]{test_patterns.pdf}
+   \caption{\textit{Campaign B: target trajectories (red, dashed) and measured ball paths in steady state, run 1 (blue) and runs 2--5 (gray), with the detected screw contacts (orange) and the bracket markers (black).}}
+   \label{fig:test_patterns}
+\end{figure}
+
 \section{Settling Time and Steady-State Error}
 \label{sec:exp_settling}
 
@@ -691,6 +735,19 @@ When the target is fixed at the center, the ball is held with a \textbf{mean err
 
 On the moving patterns the \textbf{steady-state error is 12.5\,mm (star), 14.2\,mm (circle) and 17.1\,mm (figure 8)} on average, with 95\,\% of the samples below 26.7, 24.3 and 30.6\,mm respectively. The spread between runs is small (standard deviation 0.9--1.5\,mm on the mean error), which indicates that these values are repeatable. The ball was detected in 100\,\% of the analyzed frames.
 
+In campaign B, started from the ball at rest, the patterns settle within $2.1 \pm 1.4$\,s (circle), $1.6 \pm 3.2$\,s (star) and $0.5 \pm 1.1$\,s (figure 8). In CENTER the ball is held with a \textbf{mean error of $2.3 \pm 0.7$\,mm} and stays within 5\,mm of the center during $92 \pm 6$\,\% of the time (81--100\,\% in the individual runs), with a measurement noise of 0.33\,mm (Table~\ref{tab:test_center}). The lower error than in campaign A (2.9\,mm) is consistent with the plate-centered coordinates, which hold the ball in the middle of the plate instead of 8\,mm to the side of it.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{|c|X|X|X|X|X|X|}
+\hline
+\textbf{Runs} & \textbf{Mean [mm]} & \textbf{RMS [mm]} & \textbf{P95 [mm]} & \textbf{Max [mm]} & \textbf{Within 5 mm} & \textbf{Noise [mm]} \\ \hline
+5 & $2.3 \pm 0.7$ & $2.8 \pm 0.8$ & $5.6 \pm 1.7$ & $9.1 \pm 3.5$ & $92 \pm 6$\,\% & $0.33 \pm 0.07$ \\ \hline
+\end{tabularx}
+\caption{\textit{CENTER hold after the ball was placed at rest (60\,s per run, first 5\,s excluded).}}
+\label{tab:test_center}
+\end{table}
+
 \begin{table}[H]
 \centering
 \begin{tabularx}{\textwidth}{|c|l|X|X|X|X|X|}
@@ -714,6 +771,75 @@ On the moving patterns the \textbf{steady-state error is 12.5\,mm (star), 14.2\,
 \caption{\textit{Settling time and steady-state tracking error for each run.}}
 \label{tab:per_run}
 \end{table}
+
+\section{Step Response}
+\label{sec:exp_steps}
+
+Figure~\ref{fig:test_steps} and Table~\ref{tab:test_steps} show the response to 74 target steps of 60\,mm (from $-30$ to $+30$\,mm and back, every 8\,s, 37 along each axis). Because of the rate limiter each step is a 0.5\,s ramp of the target. The ball follows quickly: it rises from 10 to 90\,\% of the step in \textbf{0.35\,s} and is only 0.18\,s behind the target at the midpoint. However, it \textbf{overshoots the new position by 56--62\,\%} of the step (about 35\,mm) and then returns with a damped oscillation. The median settling time to within $\pm$5\,\% (3\,mm) is \textbf{3.0\,s (X) and 3.7\,s (Y)}, reached within the 8\,s hold by about 60\,\% of the steps; for the tighter $\pm$2\,mm band only 27--35\,\% of the steps settle within the hold, the others keep oscillating by a few millimeters, with a mean remaining error of 1.8\,mm. The motion along the other axis stays small (2.7--3.5\,mm RMS).
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{|X|l|l|}
+\hline
+\textbf{Metric} & \textbf{STEP X} & \textbf{STEP Y} \\ \hline
+Steps & 37 & 37 \\ \hline
+Rise time 10--90\,\% [s] & $0.35 \pm 0.05$ & $0.36 \pm 0.04$ \\ \hline
+Delay at 50\,\% [s] & $0.18 \pm 0.03$ & $0.18 \pm 0.02$ \\ \hline
+Overshoot & $56 \pm 10$\,\% & $62 \pm 10$\,\% \\ \hline
+Settling time to $\pm$5\,\% (3\,mm) [s], median & $3.0$ (settled: 59\,\%) & $3.7$ (settled: 62\,\%) \\ \hline
+Settling time to $\pm$2\,mm [s], median & $4.5$ (settled: 27\,\%) & $5.9$ (settled: 35\,\%) \\ \hline
+Remaining error, last 2\,s [mm] & $1.8 \pm 1.0$ & $1.8 \pm 1.5$ \\ \hline
+Other axis, RMS [mm] & $2.7 \pm 1.1$ & $3.5 \pm 1.4$ \\ \hline
+\end{tabularx}
+\caption{\textit{Step response to 60\,mm target steps in campaign B (rate-limited to 120\,mm/s, i.e.\ a 0.5\,s ramp); times from the start of the target ramp; settled: share of the steps that settled within the 8\,s hold.}}
+\label{tab:test_steps}
+\end{table}
+
+\begin{figure}[H]
+   \centering
+   \includegraphics[width=\textwidth]{test_steps.pdf}
+   \caption{\textit{Step responses of campaign B, normalized to the 60\,mm step: all steps (gray), their median (blue), the rate-limited target (red, dashed) and the $\pm$2\,mm band (green).}}
+   \label{fig:test_steps}
+\end{figure}
+
+\section{Disturbance Rejection}
+\label{sec:exp_disturb}
+
+At the end of each run of campaign B the ball, held in CENTER, was pushed sideways by hand five times, every 8\,s. Of the 25 taps, 22 moved the ball clearly (more than about 8\,mm) and were analyzed (Table~\ref{tab:test_disturb}, Figure~\ref{fig:test_disturb}). The ball was displaced by \textbf{$40.9 \pm 13.7$\,mm} on average (up to 87\,mm), reached its largest distance 0.44\,s after the tap, swung back once past the center, and was again within 5\,mm of the center \textbf{$3.8 \pm 1.2$\,s} after the tap (20 of the 22 taps within the 7.5\,s analyzed). None of the taps threw the ball off the plate. The taps were given by hand, so their strength varies; the results describe the recovery from a light push, not from a defined impulse.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{|c|c|X|X|X|}
+\hline
+\textbf{Taps} & \textbf{Detected} & \textbf{Peak deviation [mm]} & \textbf{Time to peak [s]} & \textbf{Recovery to 5\,mm [s]} \\ \hline
+25 & 22 & $40.9 \pm 13.7$ & $0.44 \pm 0.27$ & $3.83 \pm 1.21$ \\ \hline
+\end{tabularx}
+\caption{\textit{Disturbance rejection: a light sideways tap on the ball while held in CENTER (5 per run).}}
+\label{tab:test_disturb}
+\end{table}
+
+\begin{figure}[H]
+   \centering
+   \includegraphics[width=0.8\textwidth]{test_disturb.pdf}
+   \caption{\textit{Distance of the ball from the center after each of the 22 analyzed taps (gray) and their median (blue).}}
+   \label{fig:test_disturb}
+\end{figure}
+
+\section{Screw Contacts and Ball Losses}
+\label{sec:exp_contacts}
+
+The plate is held by four brackets, each with two screws whose heads stand above the surface; seen from the camera they lie on the diagonals, about 103\,mm from the center. When the ball touches a screw its velocity changes abruptly, while the controller changes it smoothly. We counted a contact when the ball's velocity changed by more than 100\,mm/s between two consecutive windows of 5 frames (83\,ms each), at least 65\,mm from the center and within $15^\circ$ of a bracket direction; detections less than 0.2\,s apart count as one. Without the direction condition, 83\,\% of such abrupt changes beyond 65\,mm lie near a bracket, while the ball spends only 48\,\% of its time at that distance there, which confirms that the criterion detects contacts and not control actions.
+
+In the 42.6\,min of campaign B we counted \textbf{75 contacts} (Figure~\ref{fig:test_contacts}): 62 in FIGURE 8 ($12.4 \pm 2.9$ per 60\,s phase), 10 in STAR, 2 in CIRCLE and one at rest. They occur where the enlarged lobes of the figure 8 reach the brackets, about 75\,mm from the center (Figure~\ref{fig:test_patterns}), and one bracket accounts for 34 of them. Their effect on the tracking error is small: excluding 0.3\,s around each contact lowers the mean error of the figure 8 from 16.5 to 15.8\,mm (Table~\ref{tab:test_patterns}).
+
+The ball left the plate \textbf{only once in 42.6\,min}, at the start of a FIGURE 8 phase. It left sideways, along the x-axis ($-4^\circ$, away from the brackets), without a contact in the 2\,s before. The edge guard, which moved the target to the center during about 1\,\% of the STAR and FIGURE 8 phases, did not prevent this loss.
+
+\begin{figure}[H]
+   \centering
+   \includegraphics[width=0.6\textwidth]{test_contacts.pdf}
+   \caption{\textit{Campaign B: all ball positions (gray, logarithmic density), the 75 detected screw contacts (orange) and the number of contacts at each bracket marker (black).}}
+   \label{fig:test_contacts}
+\end{figure}
 
 \section{Effect of the Control Changes}
 \label{sec:exp_before_after}
@@ -741,15 +867,19 @@ CENTER & 4.4 / 7.6 & 2.9 / 7.0 & 34\,\% \\ \hline
    \label{fig:exp_before_after}
 \end{figure}
 
+The step tests of campaign B show the price of this change. A derivative term that no longer brakes a ball moving with the target also lets the ball run past a target that stops: on a 60\,mm step the ball overshoots by about 60\,\% (Section~\ref{sec:exp_steps}). The same mechanism removes the lag on the curved patterns and makes their paths 9--31\,\% larger than the target. The step response of the original derivative term was not measured, so the difference cannot be quantified; since that term damps the ball's own velocity, a smaller overshoot is expected, at the cost of the 0.4\,s lag measured above.
+
 \section{Discussion and Limitations}
 \label{sec:exp_limits}
 
-The measurements show that the system stabilizes the ball at a fixed point with an error of a few millimeters and follows the three trajectories with a repeatable error of 12--17\,mm, which is small compared with the size of the trajectories (60\,mm) and of the area in which the ball can move (about 117\,mm from the center of the platform). The remaining error is dominated by the outward deviation on curved paths rather than by lag. Reducing it would probably require a \textit{feed-forward} term derived from the target's acceleration, or a model-based controller such as the LQR or MPC approaches proposed in the future developments; this was not tested.
+The measurements show that the system holds the ball at a fixed point with an error of 2--3\,mm and follows the three trajectories with an error of 12--17\,mm, repeatable within about 1\,mm over nine runs in two campaigns, which is small compared with the size of the trajectories (60\,mm) and of the area in which the ball can move (about 117\,mm from the center of the platform). It recovers from a light push within about 4\,s and lost the ball only once in 43\,min of testing. The remaining error is dominated by the outward deviation on curved paths rather than by lag, and the same property of the derivative term produces a large overshoot on target steps; the screw contacts are a consequence of the enlarged figure 8. Reducing these would probably require a \textit{feed-forward} term derived from the target's acceleration, or a model-based controller such as the LQR or MPC approaches proposed in the future developments; this was not tested.
 
 The results have the following limitations:
 \begin{itemize}
-    \item \textbf{Number of runs:} Three to four runs per pattern, recorded in one session and one lighting condition; the standard deviations describe the repeatability between these runs only.
-    \item \textbf{Fixed transitions:} Each phase is preceded by a fixed pattern (the cycling order), so the settling times characterize those particular transitions.
+    \item \textbf{Number of runs:} Three to four runs per pattern in campaign A and five in campaign B, each campaign recorded in one session and one lighting condition; the standard deviations describe the repeatability within these sessions only.
+    \item \textbf{Transitions:} In campaign A each phase is preceded by a fixed pattern (the cycling order); in campaign B every test starts from the ball at rest, so the settling times characterize these transitions only.
+    \item \textbf{Derivative terms:} Both derivative terms were compared on the patterns (campaign A); the step and disturbance tests were run with the final derivative term only.
+    \item \textbf{Taps by hand:} The strength of the disturbances was not controlled.
     \item \textbf{Single sensor:} The ball position is measured by the same camera that closes the loop. Systematic errors of the vision system (for example in the depth scale) would affect the target and the measurement in the same way and are not visible in these metrics.
 \end{itemize}
 
