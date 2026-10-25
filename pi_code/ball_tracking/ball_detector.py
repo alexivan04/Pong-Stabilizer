@@ -39,6 +39,11 @@ DETECTOR_MODE = "auto"   # "auto" or "sliders", see above
 # converted to pixels with the camera-to-plate distance measured from the ball.
 # Both sessions give the same plate: flat edges ~110 mm from its centre.
 PLATE_CENTER_PX  = (324, 236)  # where the camera sees the plate centre
+# Ball positions are reported relative to the plate centre, so the CENTER target
+# and the patterns sit in the middle of the plate. The camera's optical centre is
+# this far from it (measured from markers on the brackets with the plate level at
+# working height, 2026-10-25; see experiments/plate_markers on that branch).
+PLATE_CENTRE_MM  = (8.0, -1.2)
 PLATE_RADIUS_MM  = 117.0       # ball centre must be within this of it
 ROI_MARGIN_MM    = 22.0        # pixels are searched this far beyond, so a ball at the edge stays whole
 PLATE_Z_START_MM = 125.0       # camera-to-plate distance assumed until the ball is seen (low = generous)
@@ -244,8 +249,9 @@ class SliderTracker:
             z_recent = list(self.z_hist) or [Z_raw]
             Z_depth          = float(np.median(z_recent[-Z_MEDIAN_OUT:]))
             Z_scale          = float(np.median(z_recent))
-            X_real           = ((x - self.cx) * Z_scale) / self.fx
-            Y_real           = ((y - self.cy) * Z_scale) / self.fy
+            # relative to the plate centre, not the camera's optical centre
+            X_real           = ((x - self.cx) * Z_scale) / self.fx - PLATE_CENTRE_MM[0]
+            Y_real           = ((y - self.cy) * Z_scale) / self.fy - PLATE_CENTRE_MM[1]
             if Z_MIN_MM <= Z_depth <= Z_MAX_MM:
                 # follow the plate height, so the plate circle keeps fitting the plate
                 plate_z = Z_depth - REAL_BALL_DIAMETER_MM / 2

@@ -44,6 +44,10 @@ const float HEIGHT_RATE_DEG_S = 2.0f;   // ...capped at this
 const float HEIGHT_MIN_DEG    = ARM_MIN_DEG + 10.0f;
 const float HEIGHT_MAX_DEG    = ARM_MAX_DEG - 10.0f;
 
+// --- EDGE GUARD: target back to the centre when the ball nears the edge/screws
+const float EDGE_GUARD_MM     = 85.0f;  // ball this far from the plate centre: guard on
+const float EDGE_RESUME_MM    = 40.0f;  // pattern resumes once it is back inside this
+
 const float servo_gamma[4] = {5*PI/4.0f, 3*PI/4.0f, PI/4.0f, 7*PI/4.0f};
 extern volatile float motorAngles[4];
 

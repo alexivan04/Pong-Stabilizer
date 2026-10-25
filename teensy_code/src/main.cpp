@@ -37,8 +37,17 @@ enum PatternType {
     PATTERN_CIRCLE    = 1,
     PATTERN_STAR      = 2,
     PATTERN_FIGURE8   = 3,
-    PATTERN_CYCLE_ALL = 4
+    PATTERN_CYCLE_ALL = 4,
+    // Test-only patterns, selected by 5_test_runner.py; never part of CYCLE_ALL
+    PATTERN_STEP_X    = 5,
+    PATTERN_STEP_Y    = 6
 };
+
+// Step-response test: the target jumps between -STEP_MM and +STEP_MM every
+// STEP_HOLD_S. The target rate limiter still applies (120 mm/s), so each jump
+// is a 0.5 s ramp, not an instantaneous step.
+const float STEP_MM     = 30.0f;
+const float STEP_HOLD_S = 8.0f;
 
 PatternType currentPattern = PATTERN_CYCLE_ALL;
 
@@ -93,6 +102,14 @@ void getPatternTarget(PatternType pt, float t, float &tx, float &ty) {
             break;
         }
 
+        case PATTERN_STEP_X:
+        case PATTERN_STEP_Y: {
+            float s = (fmod(t, 2.0f * STEP_HOLD_S) < STEP_HOLD_S) ? STEP_MM : -STEP_MM;
+            tx = (pt == PATTERN_STEP_X) ? s : 0.0f;
+            ty = (pt == PATTERN_STEP_Y) ? s : 0.0f;
+            break;
+        }
+
         default:
             tx = 0.0f; ty = 0.0f;
             break;
@@ -128,6 +145,13 @@ void getTrajectoryTarget(float &tx, float &ty) {
 
     float raw_tx, raw_ty;
     getPatternTarget(currType, t, raw_tx, raw_ty);
+
+    // --- EDGE GUARD: back to the centre while the ball is near the edge/screws ---
+    static bool edgeGuardActive = false;
+    float ballR = sqrt(sq(ballData.x) + sq(ballData.y));
+    if (ballR > EDGE_GUARD_MM) edgeGuardActive = true;
+    else if (ballR < EDGE_RESUME_MM) edgeGuardActive = false;
+    if (edgeGuardActive) { raw_tx = 0.0f; raw_ty = 0.0f; }
 
     // --- TARGET RATE LIMITER ---
     static float    current_tx = 0.0f;
