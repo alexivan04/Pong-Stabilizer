@@ -39,9 +39,11 @@ const float Z_TARGET_MM       = 195.0f; // where the plate used to sit (190-200 
 const float Z_DEADBAND_MM     = 4.0f;   // close enough: hold the height
 const float HEIGHT_GAIN       = 0.05f;  // deg/s of arm motion per mm of height error...
 const float HEIGHT_RATE_DEG_S = 2.0f;   // ...capped at this
-// The shared height keeps 10 deg of tilt room on both sides; if Z_TARGET_MM
-// isn't reachable inside this, the plate stops at the nearest end.
-const float HEIGHT_MIN_DEG    = ARM_MIN_DEG + 10.0f;
+// The shared height keeps 12 deg of tilt room below (with 10 the low-side arm hit
+// ARM_MIN_DEG as soon as pitch and roll together asked for more than 10 deg, and
+// stopped reacting) and 10 deg above; if Z_TARGET_MM isn't reachable inside
+// this, the plate stops at the nearest end.
+const float HEIGHT_MIN_DEG    = ARM_MIN_DEG + 12.0f;
 const float HEIGHT_MAX_DEG    = ARM_MAX_DEG - 10.0f;
 
 // --- EDGE GUARD: target back to the centre when the ball nears the edge/screws

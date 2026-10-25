@@ -125,8 +125,8 @@ void computeMotorAngles(float targetX, float targetY, volatile float *motorAngle
     lastErrY = errorY;
 
     // Constrain the maximum tilt to 15 degrees to prevent mechanical crashes
-    pitch_deg = constrain(pitch_deg, -10.0f, 15.0f) * 1.0f;
-    roll_deg = constrain(roll_deg, -10.0f, 15.0f) * -1.0f;
+    pitch_deg = constrain(pitch_deg, -12.0f, 15.0f) * 1.0f;
+    roll_deg = constrain(roll_deg, -12.0f, 15.0f) * -1.0f;
 
     // --- LINEAR DEGREE MIXING ---
     // Tilt only, relative to the current plate height; main.cpp adds the

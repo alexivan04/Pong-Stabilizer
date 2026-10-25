@@ -23,7 +23,7 @@ PACKET_TYPE_START          = 3
 PACKET_TYPE_PATTERN_CHANGE = 4
 PACKET_TYPE_TARGET_POS     = 5
 # Teensy's plate-height range in deg above the low stop (HEIGHT_MIN/MAX_DEG in inverseKinematics.h)
-PLATE_HEIGHT_MIN_DEG, PLATE_HEIGHT_MAX_DEG = 15.0, 30.0
+PLATE_HEIGHT_MIN_DEG, PLATE_HEIGHT_MAX_DEG = 17.0, 30.0
 
 SERIAL_PORT = '/dev/ttyAMA0'
 BAUD_RATE   = 115200
