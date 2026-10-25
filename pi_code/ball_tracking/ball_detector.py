@@ -55,6 +55,16 @@ Z_MIN_MM, Z_MAX_MM = 90.0, 320.0  # plausible camera-to-ball distances, sets the
 Z_MEDIAN_XY  = 15   # frames of Z whose median scales X/Y (0.25 s; the plate height barely moves)
 Z_MEDIAN_OUT = 5    # frames for the reported Z: drops single-frame spikes, ~2 frames delay
 
+# A false blob (reflection, skin at the edge) made the ball "jump" across the
+# plate and the arms move chaotically. The ball can't move faster than about
+# MAX_BALL_SPEED_MM_S, so a detection farther from the last accepted one is held
+# back until CONFIRM_FRAMES detections in a row agree on the new place; the same
+# goes for the first detections after the ball was lost for LOST_S.
+MAX_BALL_SPEED_MM_S = 1500.0
+JUMP_SLACK_MM       = 15.0    # allowed on top of that (noise, one frame of delay)
+CONFIRM_FRAMES      = 5       # ~80 ms at 60 fps
+LOST_S              = 0.3
+
 LEGACY_HSV_FILE = "hsv_values.txt"
 CALIB_FILE      = "cam_calib_fisheye.npz"
 
@@ -202,6 +212,8 @@ class SliderTracker:
         self.prev_smooth = None
         self.vx = self.vy = self.vz = 0.0
         self.z_hist = deque(maxlen=Z_MEDIAN_XY)
+        self.accepted = None   # (u, v, r, time) of the last detection that was believed
+        self.pending = []      # unconfirmed detections at a new place
 
     @property
     def mask(self):
@@ -235,7 +247,34 @@ class SliderTracker:
         ((x, y), radius, _) = max(circles, key=lambda c: c[2])
         return (x, y, radius) if radius > 5 else None
 
+    def _gate(self, det, now):
+        """det if it is plausible, else None (see MAX_BALL_SPEED_MM_S)."""
+        if det is None:
+            self.pending = []
+            return None
+        mm_to_px = self.fx / self.plate_z
+        def reachable(a, b, dt):
+            return math.hypot(a[0] - b[0], a[1] - b[1]) <= \
+                (MAX_BALL_SPEED_MM_S * dt + JUMP_SLACK_MM) * mm_to_px
+        acc = self.accepted
+        if acc is not None and now - acc[3] < LOST_S and reachable(det, acc, now - acc[3]):
+            self.pending = []
+        else:
+            if self.pending and not reachable(det, self.pending[-1], now - self.pending[-1][3]):
+                self.pending = []
+            self.pending.append((*det, now))
+            if len(self.pending) < CONFIRM_FRAMES:
+                # keep the auto tracker's search window on the real ball
+                if acc is not None and now - acc[3] < LOST_S and hasattr(self, "last"):
+                    self.last = acc[:3]
+                return None
+            self.pending = []
+        self.accepted = (*det, now)
+        return det
+
     def _state(self, det, now):
+        now = time.time() if now is None else now
+        det = self._gate(det, now)
         found = det is not None
         X_real, Y_real, Z_depth = 0.0, 0.0, 0.0
         x = y = radius = 0.0
@@ -259,7 +298,6 @@ class SliderTracker:
                 if abs(plate_roi(self.fx, self.plate_z)[2] - self.roi[2]) >= 2:
                     self._set_roi()
 
-        now = time.time() if now is None else now
         dt = now - self.prev_time
         if dt <= 0: dt = 0.016
 
