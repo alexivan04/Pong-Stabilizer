@@ -37,10 +37,10 @@
   and many colour changes to print. Improve contrast instead: white L with a black dot printed
   into the arm, as large as the space allows.
 
-- **Faster camera (IMX296 row crop).** The frame rate depends almost only on the number of rows
-  read: 1088 rows ~60 fps, ~540 rows ~120 fps, ~270 rows ~240 fps. Set with `media-ctl` before the
-  camera starts (documented by Raspberry Pi for the GS camera). The plate is ~450 px tall on the
-  sensor, so ~120 fps keeps the whole plate.
+- **Faster camera (IMX296 row crop).** The sensor reads row by row, so fewer rows should give a
+  higher frame rate (estimate, unverified: ~540 rows ~120 fps). Not in the official Raspberry Pi
+  docs; community method from the Raspberry Pi forum: crop the sensor with `media-ctl` before the
+  camera starts. The plate is ~450 px tall on the sensor. Measure the real fps first.
   - Exposure max 8.3 ms at 120 fps: half the light (needs the light ring), half the motion blur.
   - Shift the camera matrix by the crop offset (no new checkerboard needed).
   - Budget 8.3 ms per frame: tracking ~2 ms OK, full search ~17 ms skips frames.
@@ -49,8 +49,10 @@
   - UART ~3.5 kB/s at 120 fps, under 11.5 kB/s at 115200 baud (raise the baud rate if needed).
   - Latency ~25 ms -> ~12-15 ms.
   - First test camera-only (no motors): stop the tracker, set the crop, measure fps and brightness.
-- **Hardware trigger (GS camera XTR input).** The camera can expose on an external pulse instead
-  of its own clock (needs a small board modification, see the Raspberry Pi docs). The Teensy could
+- **Hardware trigger (GS camera XTR input), official:** Raspberry Pi docs, "External Trigger on the
+  Global Shutter Camera". XTR is a 1.8 V input; if Q2 is fitted, remove R11; solder XTR + GND.
+  Exposure = low pulse width + 14.26 us, frame rate = pulse frequency. From 3.3 V: 1.5 kOhm in
+  series, 1.8 kOhm XTR-GND. Max rate still limited by the sensor readout (test with a crop). The Teensy could
   trigger every frame, so the exposure time is known exactly in the Teensy's clock: precise
   timing for bouncing and no clock conversion between Pi and Teensy.
 
