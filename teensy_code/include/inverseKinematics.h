@@ -32,6 +32,16 @@ const float ARM_MAX_DEG       = 40.0f;  // hard limit above the low stop; the ol
                                         // 25 deg above the Z~200 mm neutral, so normal running stays below
 const float ARM_LIFT_S        = 1.0f;   // start-up: lift from the stop to ARM_MIN_DEG this slowly
 
+// --- RE-HOMING: the steppers have no encoders, and violent moves (false detections,
+// a falling ball) lose steps: the arms then sit lower or tilted against what the
+// firmware counts (seen: counted 34 deg while Z said ~8 deg; ball held 65 mm off
+// centre by a tilt offset). When the ball has been gone for REHOME_LOST_MS the arms
+// sink slowly to REHOME_BELOW_DEG under the counted stop, so each one stalls on its
+// real stop, and that becomes 0 deg again.
+const uint32_t REHOME_LOST_MS  = 3000;
+const float REHOME_RATE_DEG_S  = 6.0f;
+const float REHOME_BELOW_DEG   = 4.0f;
+
 // --- PLATE HEIGHT: while balancing, all arms rise/sink together until the
 // ball is Z_TARGET_MM from the camera (the Pi measures Z from the ball's size;
 // the camera is under the plate, so raising the plate increases Z) ---
@@ -56,5 +66,6 @@ extern volatile float motorAngles[4];
 
 float calculateArmAngle(int i, float pitch, float roll);
 void computeMotorAngles(float targetX, float targetY, volatile float *motorAngles);
+void resetPID();
 
 #endif

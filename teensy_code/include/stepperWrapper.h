@@ -19,6 +19,9 @@ public:
     void setTargetStep(long long target) { _targetStep = target; }
     void setCurrentPositionInSteps(long long steps);
     long long getSteps();
+    // one step pulse straight to the driver, not counted in the position
+    // (the start-up tune pairs every pulse with one back, so it nets to zero)
+    void rawPulse(bool positive);
 
     void setTargetRPM(float rpm); 
     void setRunWithoutPosition(bool state) { _runWithoutPosition = state; }
@@ -42,7 +45,8 @@ private:
     volatile float _currentSpeed = 0;
     float _targetSpeed = 0;
 
-    float _maxSpeed = 35000.0f; // hardware limit
+    float _maxSpeed = 10000.0f; // ~1100 deg/s; balancing needs < 1000 steps/s, and the
+                                // old 35000 lost steps in violent moves
     float _accel = 90.0f;      // accel rate per update
     float _Kp = 25.0f;          // aggressiveness
 

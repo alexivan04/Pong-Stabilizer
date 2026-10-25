@@ -42,6 +42,15 @@ void resetPID() {
     smoothedTargetDerivX = smoothedTargetDerivY = 0;
 }
 
+// --- INTEGRAL ---
+// Frozen while the ball is lost, and emptied over ~1 s when it comes back after a
+// longer loss (a re-home has then removed the tilt it was compensating). It is not
+// limited to small errors: a tilt offset (e.g. from lost steps) holds the ball far
+// from the target, and only the integral can work that off.
+const uint32_t I_LOST_MS  = 500;     // a loss this long empties the integral on return
+const uint32_t I_BLEED_MS = 1000;
+const float I_BLEED_TAU_S = 0.3f;
+
 // PLATE BOUNDARY LIMITS (in mm)
 const float PLATE_LIMIT_X = 180.0f * UNIT_SCALE;
 const float PLATE_LIMIT_Y = 180.0f * UNIT_SCALE;
@@ -98,8 +107,28 @@ void computeMotorAngles(float targetX, float targetY, volatile float *motorAngle
     // it made the ball lag the circle/figure-8 by ~0.4 s and swing wide.
     // With a still target (CENTER) this is the same as before.
 
+    // --- INTEGRAL: see I_LOST_MS ---
+    static uint32_t lostSince = 0, bleedUntil = 0;
+    if (!ballData.is_found) {
+        if (lostSince == 0) lostSince = now ? now : 1;
+    } else if (lostSince != 0) {
+        if (now - lostSince >= I_LOST_MS) bleedUntil = now + I_BLEED_MS;
+        lostSince = 0;
+    }
+    const float intLimit = 50.0f * UNIT_SCALE;
+    if (ballData.is_found) {
+        errX_int += errorX * dt;
+        errY_int += errorY * dt;
+        if ((int32_t)(bleedUntil - now) > 0) {
+            float k = expf(-dt / I_BLEED_TAU_S);
+            errX_int *= k;
+            errY_int *= k;
+        }
+    }
+    errX_int = constrain(errX_int, -intLimit, intLimit);
+    errY_int = constrain(errY_int, -intLimit, intLimit);
+
     // X Axis PID (Roll / Left-Right Tilt)
-    errX_int = constrain(errX_int + (errorX * dt), -50.0f * UNIT_SCALE, 50.0f * UNIT_SCALE);
     float rawDerivX = (filteredX - lastFilteredX) / dt;
     smoothedDerivX = (0.2f * rawDerivX) + (0.8f * smoothedDerivX);
     float rawTargetDerivX = (filteredTX - lastFilteredTX) / dt;
@@ -112,7 +141,6 @@ void computeMotorAngles(float targetX, float targetY, volatile float *motorAngle
     lastErrX = errorX;
 
     // Y Axis PID (Pitch / Front-Back Tilt)
-    errY_int = constrain(errY_int + (errorY * dt), -50.0f * UNIT_SCALE, 50.0f * UNIT_SCALE);
     float rawDerivY = (filteredY - lastFilteredY) / dt;
     smoothedDerivY = (0.2f * rawDerivY) + (0.8f * smoothedDerivY);
     float rawTargetDerivY = (filteredTY - lastFilteredTY) / dt;

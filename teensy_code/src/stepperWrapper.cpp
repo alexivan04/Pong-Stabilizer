@@ -46,6 +46,14 @@ long long stepperWrapper::getActualPosition() {
     return _internalSteps;
 }
 
+void stepperWrapper::rawPulse(bool positive) {
+    digitalWriteFast(_dir, positive ? HIGH : LOW);
+    delayMicroseconds(5);     // DM556 needs DIR settled before the STEP edge
+    digitalWriteFast(_step, HIGH);
+    delayMicroseconds(5);
+    digitalWriteFast(_step, LOW);
+}
+
 long long stepperWrapper::getSteps() {
     return getActualPosition();
 }

@@ -242,6 +242,72 @@ void initArms() {
     rampArms(0.0f, ARM_MIN_DEG, ARM_LIFT_S);
 }
 
+// ==========================================
+// --- START-UP TUNE ---
+// ==========================================
+// The motors hum at the rate they are pulsed. A real note would turn the arms
+// hundreds of degrees a second, so each one is played as a fast wobble instead:
+// TUNE_HALF microsteps up, the same back, at the note's frequency (+-0.22 deg of
+// arm at 1/16 microstepping). Every note ends on a whole wobble, so the arms end
+// exactly where they started; it runs after the lift, well clear of the low stop.
+const bool STARTUP_TUNE = false;
+const int  TUNE_HALF    = 4;   // 8 (+-0.45 deg) shook the plate hard
+
+struct Note { float hz; uint16_t ms; };   // hz = 0: rest
+const Note TUNE[] = {
+    {659, 120}, {0, 30}, {659, 120}, {0, 180}, {659, 120}, {0, 180},
+    {523, 120}, {0, 30}, {659, 150}, {0, 150}, {784, 150}, {0, 450},
+    {392, 200}
+};
+
+void playNote(float hz, uint16_t ms) {
+    if (hz <= 0.0f) { delay(ms); return; }
+    float period_us = 1e6f / (hz * 2 * TUNE_HALF);
+    long pulses = lroundf(hz * ms / 1000.0f) * 2 * TUNE_HALF;
+    uint32_t t0 = micros();
+    for (long i = 0; i < pulses; i++) {
+        while (micros() - t0 < (uint32_t)(i * period_us)) {}
+        bool up = (i / TUNE_HALF) % 2 == 0;
+        // up is negative on M0/M2 and positive on M1/M3, so the plate moves as one
+        stepper_1.rawPulse(!up);
+        stepper_2.rawPulse( up);
+        stepper_3.rawPulse(!up);
+        stepper_4.rawPulse( up);
+    }
+}
+
+void playStartupTune() {
+    for (const Note &n : TUNE) playNote(n.hz, n.ms);
+    delay(200);
+}
+
+// Sink all arms slowly onto their real low stop and zero them there again (see
+// REHOME_LOST_MS). Runs only while no ball is on the plate.
+void rehomeArms(float fromDeg) {
+    float a = fromDeg;
+    uint32_t last = millis();
+    while (a > -REHOME_BELOW_DEG) {
+        checkSerial();
+        if (millis() - last < 5) continue;
+        float dt = (millis() - last) / 1000.0f;
+        last = millis();
+        a = max(a - REHOME_RATE_DEG_S * dt, -REHOME_BELOW_DEG);
+        // not setArms: it would stop at ARM_MIN_DEG
+        long s = (long)DEG_TO_MOTOR_STEPS(a);
+        stepper_1.setTargetStep(-s);
+        stepper_2.setTargetStep( s);
+        stepper_3.setTargetStep(-s);
+        stepper_4.setTargetStep( s);
+        stepper_1.update();
+        stepper_2.update();
+        stepper_3.update();
+        stepper_4.update();
+    }
+    stepperDelay(500);   // the rest of the way, stalling on the stop
+    initArms();          // zero here and lift to ARM_MIN_DEG
+    resetPID();
+}
+
 // Raise/lower all arms together until the ball is Z_TARGET_MM from the camera.
 // First rises to HEIGHT_MIN_DEG on its own (tilt room), then only moves while
 // the Pi sees the ball at a believable distance.
@@ -279,6 +345,8 @@ void runPongLoop() {
     }
 
     uint32_t lastUpdate = millis();
+    uint32_t lastSeen   = millis();
+    bool homed = true;   // just zeroed at start-up
 
     while (true) {
         checkSerial();
@@ -307,6 +375,17 @@ void runPongLoop() {
             float targetX = 0.0f;
             float targetY = 0.0f;
             getTrajectoryTarget(targetX, targetY);
+
+            if (ballData.is_found) {
+                lastSeen = millis();
+                homed = false;
+            } else if (!homed && millis() - lastSeen >= REHOME_LOST_MS) {
+                rehomeArms(heightDeg);
+                heightDeg = ARM_MIN_DEG;   // rises again like at start-up
+                homed = true;
+                lastUpdate = millis();
+                continue;
+            }
 
             computeMotorAngles(targetX, targetY, motorAngles);
             updatePlateHeight(heightDeg, dt);
@@ -345,5 +424,6 @@ int main() {
     pidValues.D = Kd;
 
     initArms();
+    if (STARTUP_TUNE) playStartupTune();
     runPongLoop();
 }
