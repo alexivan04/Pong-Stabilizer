@@ -41,6 +41,11 @@
   higher frame rate (estimate, unverified: ~540 rows ~120 fps). Not in the official Raspberry Pi
   docs; community method from the Raspberry Pi forum: crop the sensor with `media-ctl` before the
   camera starts. The plate is ~450 px tall on the sensor. Measure the real fps first.
+  Forum reports (2023-24): 720x240 crop ~250 fps on a Pi 5, 128x96 > 2000 fps.
+  - https://forums.raspberrypi.com/viewtopic.php?t=348642 (and &start=25)
+  - https://gist.github.com/Hermann-SW/e6049fe1a24fc2b5a53c654e0e9f6b9c (crop tool)
+  - https://forums.raspberrypi.com/viewtopic.php?p=2301171
+  - https://docs.arducam.com/Raspberry-Pi-Camera/Native-camera/Global-Shutter/1.58MP-IMX296/
   - Exposure max 8.3 ms at 120 fps: half the light (needs the light ring), half the motion blur.
   - Shift the camera matrix by the crop offset (no new checkerboard needed).
   - Budget 8.3 ms per frame: tracking ~2 ms OK, full search ~17 ms skips frames.
@@ -52,7 +57,9 @@
 - **Hardware trigger (GS camera XTR input), official:** Raspberry Pi docs, "External Trigger on the
   Global Shutter Camera". XTR is a 1.8 V input; if Q2 is fitted, remove R11; solder XTR + GND.
   Exposure = low pulse width + 14.26 us, frame rate = pulse frequency. From 3.3 V: 1.5 kOhm in
-  series, 1.8 kOhm XTR-GND. Max rate still limited by the sensor readout (test with a crop). The Teensy could
+  series, 1.8 kOhm XTR-GND. Max rate still limited by the sensor readout (test with a crop).
+  - https://www.raspberrypi.com/documentation/accessories/camera.html#external-trigger-on-the-global-shutter-camera
+  - https://github.com/raspberrypi/documentation/blob/master/documentation/asciidoc/accessories/camera/external_trigger.adoc The Teensy could
   trigger every frame, so the exposure time is known exactly in the Teensy's clock: precise
   timing for bouncing and no clock conversion between Pi and Teensy.
 
