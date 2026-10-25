@@ -884,11 +884,33 @@ The results have the following limitations:
 \end{itemize}
 
 
-% ---------------------------------------------------------------------------
-% BILL OF MATERIALS: to be added by the authors.
-% \section{Bill of Materials and Project Cost}
-% \label{sec:bom}
-% ---------------------------------------------------------------------------
+\section{Bill of Materials and Project Cost}
+\label{sec:bom}
+
+Table~\ref{tab:bom} lists the components of the system as described in this report, with the prices paid (including VAT). Spare parts, components bought for development but not used in the final system (magnetic encoders, an inertial measurement unit), the 3D-printed parts and small consumables (wiring, the plexiglass plate, the LED lighting and the master switch) are not included. The parts that make up the \textbf{OctoBouncer} cost \textbf{2,332.71\,RON} in total.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{|c|>{\raggedright\arraybackslash}X|l|c|r|r|}
+\hline
+\textbf{No.} & \textbf{Component} & \textbf{Supplier} & \textbf{Qty} & \textbf{Unit [RON]} & \textbf{Total [RON]} \\ \hline
+1 & Raspberry Pi 5, 8\,GB & -- & 1 & 415.00 & 415.00 \\ \hline
+2 & Raspberry Pi Global Shutter Camera & -- & 1 & 218.00 & 218.00 \\ \hline
+3 & Fisheye camera lens & TME & 1 & 108.93 & 108.93 \\ \hline
+4 & Teensy 4.1 & Optimus Digital & 1 & 200.00 & 200.00 \\ \hline
+5 & Shield for the Raspberry Pi 5 & Optimus Digital & 1 & 28.37 & 28.37 \\ \hline
+6 & DM556 stepper driver & Optimus Digital & 4 & 59.99 & 239.96 \\ \hline
+7 & NEMA 17 stepper motor, 1.5\,A & Robofun & 4 & 94.35 & 377.40 \\ \hline
+8 & AC-DC power supply 48V, 500\,W & -- & 1 & 413.47 & 413.47 \\ \hline
+9 & Step-down converter EMG122 & eMAG & 2 & 61.99 & 123.98 \\ \hline
+10 & Metal motor bracket & TME & 4 & 27.00 & 108.00 \\ \hline
+11 & Precision bearing & Optimus Digital & 16 & 2.49 & 39.84 \\ \hline
+12 & Screw M3 $\times$ 70\,mm & Optimus Digital & 24 & 2.49 & 59.76 \\ \hline
+\multicolumn{5}{|r|}{\textbf{Total}} & \textbf{2,332.71} \\ \hline
+\end{tabularx}
+\caption{\textit{Bill of materials of the components used in the system (prices including VAT).}}
+\label{tab:bom}
+\end{table}
 
 \section{Industrial and Commercial Applications}
 \label{sec:applications}
@@ -901,7 +923,7 @@ The technology developed in \textbf{OctoBouncer} is not limited to balancing a b
     \item \textbf{Material handling without grippers:} In manufacturing, small parts can be positioned, aligned or sorted by tilting the surface they lie on, instead of being picked up. The vision-guided control of OctoBouncer moves a free object along a prescribed path in exactly this way, which applies to part feeders, sorting tables and the alignment of components before assembly.
     \item \textbf{Leveling and orientation systems:} Work tables, optical benches, antennas and solar panels have to be kept level or oriented in a defined direction. The same control structure (measurement, PID controller, inverse kinematics) keeps a platform at a set orientation and height, with the camera replaced by the sensor relevant for the application.
     \item \textbf{Medical rehabilitation and balance training:} Tilting platforms are used in physiotherapy for ankle rehabilitation and balance training. Programmable trajectories such as CIRCLE or FIGURE 8 correspond to the controlled movement patterns used in these exercises, and the height control makes it possible to adapt the platform to the patient.
-    \item \textbf{Education and research:} Ball-and-plate systems are established laboratory equipment in control engineering education \cite{ball_plate_model}. OctoBouncer can be used as a teaching platform covering image processing, inverse kinematics, PID tuning and real-time embedded programming on open hardware, at the cost given in the bill of materials.
+    \item \textbf{Education and research:} Ball-and-plate systems are established laboratory equipment in control engineering education \cite{ball_plate_model}. OctoBouncer can be used as a teaching platform covering image processing, inverse kinematics, PID tuning and real-time embedded programming on open hardware, for about 2,333\,RON in components (Section~\ref{sec:bom}).
 \end{itemize}
 
 In all these applications the system would keep its architecture: a high-level processor for perception, a real-time microcontroller for control, and a parallel mechanism for actuation. The main adaptations would be the sensor (camera, inertial sensor or distance sensor, depending on the task), the size and load capacity of the mechanism, and the safety certification required in an industrial or medical environment.
