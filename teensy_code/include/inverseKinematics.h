@@ -41,10 +41,11 @@ const float HEIGHT_GAIN       = 0.05f;  // deg/s of arm motion per mm of height 
 const float HEIGHT_RATE_DEG_S = 2.0f;   // ...capped at this
 // The shared height keeps 12 deg of tilt room below (with 10 the low-side arm hit
 // ARM_MIN_DEG as soon as pitch and roll together asked for more than 10 deg, and
-// stopped reacting) and 10 deg above; if Z_TARGET_MM isn't reachable inside
-// this, the plate stops at the nearest end.
+// stopped reacting). Upwards it is only bounded by the arms' hard limit: a cap
+// 10 deg below it stopped the height control while it still had to rise; the
+// high-side arm is still clamped at ARM_MAX_DEG.
 const float HEIGHT_MIN_DEG    = ARM_MIN_DEG + 12.0f;
-const float HEIGHT_MAX_DEG    = ARM_MAX_DEG - 10.0f;
+const float HEIGHT_MAX_DEG    = ARM_MAX_DEG;
 
 // --- EDGE GUARD: target back to the centre when the ball nears the edge/screws
 const float EDGE_GUARD_MM     = 85.0f;  // ball this far from the plate centre: guard on

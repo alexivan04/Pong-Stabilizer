@@ -381,7 +381,7 @@ For reasons of structural safety and to prevent collisions between links or the 
 \begin{equation}
     -12^\circ \leq \theta_{pitch, roll} \leq 15^\circ
 \end{equation}
-In addition, every arm command is limited to the range $5^\circ \leq \alpha_i \leq 40^\circ$ above the low stop, so that the arms never press against the stop, and the common height angle $\alpha_h$ is kept between $17^\circ$ and $30^\circ$, which leaves $12^\circ$ of tilt range below and $10^\circ$ above. With only $10^\circ$ below (the earlier setting), the lower arm reached its limit as soon as pitch and roll together asked for more than $10^\circ$, and stopped reacting.
+In addition, every arm command is limited to the range $5^\circ \leq \alpha_i \leq 40^\circ$ above the low stop, so that the arms never press against the stop, and the common height angle $\alpha_h$ is kept at $17^\circ$ or more, which leaves $12^\circ$ of tilt range below; upwards it is only bounded by the $40^\circ$ arm limit. With only $10^\circ$ below (the earlier setting), the lower arm reached its limit as soon as pitch and roll together asked for more than $10^\circ$, and stopped reacting; an upper height limit of $30^\circ$ (also removed after the tests) stopped the height control while the plate still had to rise.
 
 These constraints keep the system in a zone of relative linearity and prevent the motors from being forced into extreme positions. At the moment, the \textit{bouncing} function is disabled in order to protect the integrity of the rod-joint assembly under heavy dynamic loads, as it has not yet been tested sufficiently.
 
@@ -592,7 +592,7 @@ An \textbf{edge guard} protects the ball itself: when it moves more than 85\,mm 
 
 The arm angles are measured from the mechanical low stop, so the arms must rest on the stop when the Raspberry Pi sends the \texttt{START} command. At startup the Teensy lifts all arms to $5^\circ$ in 1\,s, then raises them together at $2^\circ$/s to $17^\circ$ while the balancing loop is already active, so the ball can be placed on the platform immediately.
 
-From there, the common height angle $\alpha_h$ is controlled from the measured depth of the ball: since the camera is under the platform, a higher platform increases $Z$. The Teensy keeps the ball at $Z = 195 \pm 4$\,mm by moving $\alpha_h$ at $0.05^\circ$/s per millimeter of error, at most $2^\circ$/s, within the range $17^\circ$--$30^\circ$. The depth is low-pass filtered and only used while the ball is within 75\,mm of the center, where its estimate is reliable. The height setting is reported to the Raspberry Pi in the \texttt{TARGET\_POS} packet.
+From there, the common height angle $\alpha_h$ is controlled from the measured depth of the ball: since the camera is under the platform, a higher platform increases $Z$. The Teensy keeps the ball at $Z = 195 \pm 4$\,mm by moving $\alpha_h$ at $0.05^\circ$/s per millimeter of error, at most $2^\circ$/s, between $17^\circ$ and the $40^\circ$ arm limit. The depth is low-pass filtered and only used while the ball is within 75\,mm of the center, where its estimate is reliable. The height setting is reported to the Raspberry Pi in the \texttt{TARGET\_POS} packet.
 
 \chapter{Experimental Results and Conclusions}
 \label{chap:rezultate}
@@ -607,7 +607,7 @@ We measured the performance of the \textbf{OctoBouncer} on the physical system i
     \item \textbf{Campaign B (25 October 2026):} an automated test protocol (\texttt{5\_test\_runner.py}) ran five times in a row, 42.6\,min and 153{,}380 frames at 60\,fps in total. Each run consists of 60\,s in CENTER, 64\,s of target steps along each axis (Section~\ref{sec:exp_steps}), 60\,s of each pattern and five light taps on the ball held in CENTER (Section~\ref{sec:exp_disturb}). Every test starts from the ball at rest after 10\,s in CENTER, so all transitions are the same. The ball fell off once and was put back; the interrupted phase was repeated automatically.
 \end{itemize}
 
-Campaign B differs from campaign A in three details, introduced between the two: the positions are relative to the center of the plate instead of the camera (Section~\ref{sec:vision}), the edge guard is active, and the tilt range is that of Section~\ref{sec:ik_linear} (in campaign A: $-10^\circ$ to $15^\circ$, and a minimum height of $15^\circ$). Only the final derivative term was tested in campaign B.
+Campaign B differs from campaign A in three details, introduced between the two: the positions are relative to the center of the plate instead of the camera (Section~\ref{sec:vision}), the edge guard is active, and the tilt range is that of Section~\ref{sec:ik_linear} (in campaign A: $-10^\circ$ to $15^\circ$, and a minimum height of $15^\circ$). In both campaigns the plate height was still limited to $30^\circ$. Only the final derivative term was tested in campaign B.
 
 In these runs the ball positions are expressed in true millimeters. The HSV pipeline of Section~\ref{sec:vision} reports about $1/1.4$ of the true distances, because the dilated mask overestimates the apparent radius of the ball; the PID gains of Chapter~\ref{chap:control} were therefore divided by the same factor 1.4, so that the controller behaves identically.
 
