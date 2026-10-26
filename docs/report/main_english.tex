@@ -318,6 +318,7 @@ Three aspects of these ratings are relevant for the operation of the system:
 The kinematic model of the \textbf{OctoBouncer} system has the role of establishing a precise correlation between the Cartesian coordinate space (the position and orientation of the platform) and the joint space (the rotation angles of the 4 stepper motors). For this project, we implemented an inverse kinematics model based on the geometry of parallel systems with 4 support points, using the mathematical basis specific to parallel robots \cite{parallel_robot}, derived from the architecture of the Stewart manipulator \cite{ik_stewart}.
 
 \section{Geometric Parameters of the System}
+\label{sec:geom_params}
 In the geometric calculations, we used the following constant dimensions, determined through CAD design and direct measurements:
 \begin{itemize}[leftmargin=1.5cm]
     \item \textbf{$L_1$ (98.1 mm):} Length of the arm fixed on the motor shaft.
@@ -368,7 +369,7 @@ The final rotation angle of the motor, $\alpha_i$, is the sum of the base geomet
 \section{Implementation in the Control Loop}
 \label{sec:ik_linear}
 
-The complete model above is implemented in the firmware (the \texttt{calculateArmAngle} function) and describes the geometry of the mechanism. In the current version of the real-time loop, however, it is not called: for the small tilts needed for balancing, the relation between the tilt of the platform and the rotation of each arm is close to linear, so the controller uses a \textbf{linear mixing} of the two tilt commands. The PID outputs $\theta_{pitch}$ and $\theta_{roll}$ (Chapter~\ref{chap:control}) are expressed directly in degrees of arm rotation, and each arm receives:
+The model above, implemented in the firmware as the \texttt{calculateArmAngle} function, describes a general four-arm parallel platform. For this mechanism, the controller uses a simpler relation that follows directly from the geometry of the arm: as long as the transmission rod stays close to vertical, a rotation $\Delta\alpha$ of the arm raises its joint by about $L_1\,\Delta\alpha$, i.e.\ 1.7\,mm per degree. This agrees with the 1.6\,mm per degree measured from the depth of the ball while the plate rises at start-up. The exact model with the parameters of Section~\ref{sec:geom_params}, in contrast, does not reproduce this measured relation (it predicts 3.5\,mm per degree around the neutral height), so it is kept as a reference for a future geometry and is not used in the control loop. Since the height of each joint, and therefore the tilt of the platform, depends linearly on the arm angles, the controller uses a \textbf{linear mixing} of the two tilt commands. The PID outputs $\theta_{pitch}$ and $\theta_{roll}$ (Chapter~\ref{chap:control}) are expressed directly in degrees of arm rotation, and each arm receives:
 \begin{equation}
     \alpha_i = \alpha_h + \sigma_i^{p}\,\theta_{pitch} + \sigma_i^{r}\,\theta_{roll}
 \end{equation}
