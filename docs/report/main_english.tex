@@ -60,7 +60,7 @@
     \vspace{0.8cm}
     {\Large \textbf{Assoc. Prof. Dr. Eng. Daniel Rosner}} \\
     \vspace{0.2cm}
-    {\Large \textbf{Eng. Teodor Dicu}} \\
+    {\Large \textbf{Teaching Assist. PhD Cand. Eng. Teodor Dicu}} \\
     \vspace{0.2cm}
     {\Large \textbf{Teaching Assist. PhD Cand. Eng. Vlad Stănescu}} \\
     \vfill
@@ -104,7 +104,7 @@ The mechanical design of the \textbf{OctoBouncer} system evolved through an iter
 \section{Anatomy of the Actuation Arm and Kinematic Optimization}
 The actuation arm is the most stressed component of the system, being designed to balance low mass with high mechanical strength. Its prototyping was carried out by 3D printing from \textbf{PET-G} \cite{petg_material}, a material chosen for its superior impact resistance and its ability to maintain tight assembly tolerances. Each arm integrates a complex hybrid structure: one active joint connected directly to the motor and three free joints.
 
-From a technical standpoint, the elimination of mechanical backlash was achieved by integrating \textbf{precision bearings} at each pivot point. This decision was critical in preventing parasitic vibrations that could have destabilized the control algorithm at high frequencies. An important innovation compared to previous versions was the introduction of an additional joint on a perpendicular plane, positioned at the point of contact with the platform. This modification solved the diagonal mobility limitations, allowing the platform to execute complex trajectories without geometric constraints.
+From a technical standpoint, the elimination of mechanical backlash was achieved by integrating \textbf{precision bearings} at each pivot point. This decision was critical in preventing parasitic vibrations that could have destabilized the control algorithm at high frequencies. An important improvement compared to previous versions was the introduction of an additional joint on a perpendicular plane, positioned at the point of contact with the platform. This modification solved the diagonal mobility limitations, allowing the platform to execute complex trajectories without geometric constraints.
 
 \begin{figure}[H]
    \centering
@@ -245,14 +245,14 @@ Figures~\ref{fig:schematic_power}--\ref{fig:schematic_drive} show the complete e
 
 \begin{figure}[H]
    \centering
-   \includegraphics[width=0.75\textwidth, trim=671.1bp 458.2bp 320.9bp 66.3bp, clip]{schematic.pdf}
+   \includegraphics[width=0.55\textwidth, trim=671.1bp 458.2bp 320.9bp 66.3bp, clip]{schematic.pdf}
    \caption{\textit{Electrical schematic, part 3 of 4: Teensy 4.1.}}
    \label{fig:schematic_control}
 \end{figure}
 
 \begin{figure}[H]
    \centering
-   \includegraphics[width=0.95\textwidth, trim=872.7bp 623.8bp 32.9bp 66.3bp, clip]{schematic.pdf}
+   \includegraphics[width=0.85\textwidth, trim=872.7bp 623.8bp 32.9bp 66.3bp, clip]{schematic.pdf}
    \caption{\textit{Electrical schematic, part 4 of 4: motor drive, channel M0. The channels M1--M3 are identical; their STEP and DIR pins are listed in Table~\ref{tab:pinout}.}}
    \label{fig:schematic_drive}
 \end{figure}
@@ -609,8 +609,8 @@ From there, the common height angle $\alpha_h$ is controlled from the measured d
 We measured the performance of the \textbf{OctoBouncer} on the physical system in two test runs. Both use the final control configuration: \textbf{median-filtered depth}, a \textbf{derivative term acting on the velocity of the ball relative to the target}, and \textbf{closed-loop control of the plate height}.
 
 \begin{itemize}
-    \item \textbf{Run A (24 October 2026):} four runs (runs 7--10) in the automatic cycling mode (\textbf{CYCLE ALL}), in which the controller follows each pattern for 25\,s: CENTER, CIRCLE, STAR and FIGURE 8. The ball was placed on the plate at start-up and the system was not touched afterwards. A fifth run (run 1), recorded with the same vision system but before the control changes (derivative term on the ball's own velocity, depth not filtered), serves as the reference for the comparison of the two derivative terms in Section~\ref{sec:exp_before_after}.
-    \item \textbf{Run B (25 October 2026):} an automated test protocol (\texttt{5\_test\_runner.py}) ran five times in a row, 42.6\,min and 153{,}380 frames at 60\,fps in total. Each run consists of 60\,s in CENTER, 64\,s of target steps along each axis (Section~\ref{sec:exp_steps}), 60\,s of each pattern and five light taps on the ball held in CENTER (Section~\ref{sec:exp_disturb}). Every test starts from the ball at rest after 10\,s in CENTER, so all transitions are the same. The ball fell off once and was put back; the interrupted phase was repeated automatically.
+    \item \textbf{Run A:} four runs (runs 7--10) in the automatic cycling mode (\textbf{CYCLE ALL}), in which the controller follows each pattern for 25\,s: CENTER, CIRCLE, STAR and FIGURE 8. The ball was placed on the plate at start-up and the system was not touched afterwards. A fifth run (run 1), recorded with the same vision system but before the control changes (derivative term on the ball's own velocity, depth not filtered), serves as the reference for the comparison of the two derivative terms in Section~\ref{sec:exp_before_after}.
+    \item \textbf{Run B:} an automated test protocol (\texttt{5\_test\_runner.py}) ran five times in a row, 42.6\,min and 153{,}380 frames at 60\,fps in total. Each run consists of 60\,s in CENTER, 64\,s of target steps along each axis (Section~\ref{sec:exp_steps}), 60\,s of each pattern and five light taps on the ball held in CENTER (Section~\ref{sec:exp_disturb}). Every test starts from the ball at rest after 10\,s in CENTER, so all transitions are the same. The ball fell off once and was put back; the interrupted phase was repeated automatically.
 \end{itemize}
 
 Run B differs from run A in three details, introduced between the two: the positions are relative to the center of the plate instead of the camera (Section~\ref{sec:vision}), the edge guard is active, and the tilt range is that of Section~\ref{sec:ik_linear} (in run A: $-10^\circ$ to $15^\circ$, and a minimum height of $15^\circ$). In both runs the plate height was still limited to $30^\circ$. Only the final derivative term was tested in run B.
