@@ -1,0 +1,8 @@
+pi_code/camera_calib/calibration_images/*
+
+# generated files
+__pycache__/
+*-backups/
+*.lck
+*.kicad_prl
+\#auto_saved_files\#

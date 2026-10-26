@@ -1,0 +1,112 @@
+% ---------------------------------------------------------------------------
+% Experimental results: trajectory tracking, settling time, steady-state error.
+% Generated data: docs/report/analyze_runs.py (figures/*.pdf, tab_*.tex).
+% Insert at the start of the "Experimental Results and Conclusions" chapter,
+% in place of the "System Performance" section.
+% Needs: graphicx, float, tabularx, amsmath (all already in the preamble).
+% ---------------------------------------------------------------------------
+
+\section{Experimental Method}
+\label{sec:exp_method}
+
+We measured the tracking performance of the \textbf{OctoBouncer} on the physical system in its final configuration: \textbf{median-filtered depth}, a \textbf{derivative term acting on the velocity of the ball relative to the target}, and \textbf{closed-loop control of the plate height}. Four runs (runs 7--10, recorded on 24 October 2026) were made in the automatic cycling mode (\textbf{CYCLE ALL}), in which the controller follows each pattern for 25\,s: CENTER, CIRCLE, STAR and FIGURE 8. The ball was placed on the plate at start-up and the system was not touched afterwards. A fifth run (run 1), recorded with the same vision system but before the control changes (derivative term on the ball position only, depth not filtered), serves as the reference for the comparison in Section~\ref{sec:exp_before_after}.
+
+In these runs the ball positions are expressed in true millimeters. The HSV pipeline of Section~\ref{sec:vision} reports about $1/1.4$ of the true distances, because the dilated mask overestimates the apparent radius of the ball; the PID gains of Chapter~\ref{chap:control} were therefore divided by the same factor 1.4, so that the controller behaves identically.
+
+For every camera frame (\textbf{60 Hz}) the tracking script on the Raspberry Pi 5 logs the measured ball position $\mathbf{p}_{ball}(t)$ and the target $\mathbf{p}_{target}(t)$ that the Teensy 4.1 reports through the \texttt{TARGET\_POS} packet every 5\,ms, i.e.\ exactly the set-point used by the PID controller. All coordinates are in millimeters in the camera frame. The tracking error is defined as:
+\begin{equation}
+    e(t) = \lVert \mathbf{p}_{ball}(t) - \mathbf{p}_{target}(t) \rVert
+\end{equation}
+
+The following quantities were computed for each pattern phase:
+\begin{itemize}
+    \item \textbf{Steady-state error:} The mean, RMS, 95th percentile (P95) and maximum of $e(t)$ over the last 15\,s of each 25\,s phase. The final 0.5\,s of each phase are excluded, because the target already moves towards the next pattern.
+    \item \textbf{Settling time ($t_s$):} The time after the pattern switch from which the 1\,s moving RMS of $e(t)$ stays below $1.1$ times the largest 1\,s moving RMS observed in the steady-state window. A value of zero means that the switch produced no error transient larger than the pattern's own steady-state error.
+    \item \textbf{Lag:} The time shift of the measured path that minimizes its mean squared distance to the target (positive: the ball is behind the target; negative: ahead of it).
+    \item \textbf{Shape deviation and amplitude ratio:} The mean distance of the measured path from the ideal curve, and the ratio between the ball's mean distance from the center and the target's.
+\end{itemize}
+
+Two checks support the validity of the measurement. First, the commanded target coincides with the mathematical trajectories of Section~\ref{sec:exp_traj} (maximum deviation $0.07$\,mm), so the target rate limiter is not active in steady state and the comparison with the ideal curves is exact. Second, while the ball is held at the center, the high-frequency scatter of the measured position (deviation from its 0.25\,s moving average) is $0.57 \pm 0.12$\,mm RMS, an order of magnitude below the tracking errors reported below. The ball path is measured by the same vision system that closes the control loop; no independent ground-truth sensor was available.
+
+\section{Trajectory Tracking}
+\label{sec:exp_traj}
+
+The target trajectories are defined in the firmware of the Teensy 4.1 as:
+\begin{align}
+    \text{CIRCLE:}   \quad & x_t = 50\cos(\omega t),\; y_t = 50\sin(\omega t), & \omega &= 2\pi/5\ \text{rad/s} \\
+    \text{FIGURE 8:} \quad & x_t = 60\sin(\omega t),\; y_t = 30\sin(2\omega t), & \omega &= 2\pi/6\ \text{rad/s}
+\end{align}
+and, for the STAR, as straight segments between ten vertices at the angles $\varphi_i = \pi/2 + i\pi/5$ with radii alternating between 60\,mm and 25\,mm, covering one vertex per second (period 10\,s). All values are in millimeters.
+
+Figure~\ref{fig:exp_xy} compares these curves with the measured ball paths in steady state, and Figure~\ref{fig:exp_time} shows the same data as time series.
+
+\begin{figure}[H]
+   \centering
+   \includegraphics[width=\textwidth]{trajectories_xy.pdf}
+   \caption{\textit{Target trajectories (red, dashed) and measured ball paths in steady state (last 15\,s of each phase). Blue: run 9; gray: runs 7, 8 and 10.}}
+   \label{fig:exp_xy}
+\end{figure}
+
+\begin{figure}[H]
+   \centering
+   \includegraphics[width=\textwidth]{trajectories_time.pdf}
+   \caption{\textit{Target (red, dashed) and measured (blue) coordinates over time, run 9, steady state.}}
+   \label{fig:exp_time}
+\end{figure}
+
+The ball follows all three shapes with \textbf{almost no time lag} (Table~\ref{tab:lag}): 0.05\,s on the figure 8 and 0.10\,s on the star, while on the circle it is even 0.04\,s \textit{ahead} of the target (negative lag). This is a consequence of the derivative term acting on the velocity relative to the target: it reacts to the motion of the target itself and produces a phase lead, which compensates the delay of the plate and of the ball. The price of this lead is an overshoot in amplitude, so the remaining error is mostly geometric: the ball travels on a path that is larger than the target, by 25\,\% on the circle and 31\,\% on the figure 8, overshooting outwards where the curvature is highest. The star, made of straight segments covered at low speed, is followed most faithfully: its measured path stays on average 7.4\,mm from the ideal shape and is only 9\,\% larger, the extra displacement appearing mainly at the outer vertices.
+
+\input{tab_lag}
+
+\section{Settling Time and Steady-State Error}
+\label{sec:exp_settling}
+
+Table~\ref{tab:tracking_error} summarizes the settling time and the steady-state tracking error. Figure~\ref{fig:exp_cycle} shows the error over a complete pattern cycle, and Figure~\ref{fig:exp_center} the behavior after switching to CENTER.
+
+\input{tab_tracking_error}
+
+\begin{figure}[H]
+   \centering
+   \includegraphics[width=\textwidth]{error_cycle.pdf}
+   \caption{\textit{Tracking error over one complete pattern cycle (run 9). Thin line: $e(t)$; thick line: 1\,s moving RMS; dotted lines: settling time of each phase; colored bars at the bottom: steady-state window.}}
+   \label{fig:exp_cycle}
+\end{figure}
+
+\begin{figure}[H]
+   \centering
+   \includegraphics[width=\textwidth]{center_steady.pdf}
+   \caption{\textit{CENTER mode. Left: ball positions in steady state (blue: run 9, gray: runs 7 and 8). Right: tracking error after the switch to CENTER in run 9, with the settling band.}}
+   \label{fig:exp_center}
+\end{figure}
+
+When the target is fixed at the center, the ball is held with a \textbf{mean error of $2.9 \pm 1.5$\,mm}. In steady state it stays within 5\,mm of the center in 97\,\% and 96\,\% of the samples in runs 8 and 9, and in 65\,\% in run 7, where it stays within 10\,mm in 90\,\% of the samples. The transition into CENTER (the target returns from the previous pattern at the 120\,mm/s rate limit) settles in 2.1\,s and 2.5\,s in runs 7 and 8. In run 9 the settling time is 9.3\,s, because of a single excursion of about 12\,mm, 7\,s after the switch (Figure~\ref{fig:exp_center}, right), whose cause was not identified; for this reason the per-run values are listed in Table~\ref{tab:per_run} in addition to the mean. Switching to CIRCLE or STAR settles within $2.2 \pm 0.7$\,s and $2.4 \pm 1.8$\,s. Switching from STAR to FIGURE 8 produced no transient beyond the figure 8's own steady-state error in any of the four runs.
+
+On the moving patterns the \textbf{steady-state error is 12.5\,mm (star), 14.2\,mm (circle) and 17.1\,mm (figure 8)} on average, with 95\,\% of the samples below 26.7, 24.3 and 30.6\,mm respectively. The spread between runs is small (standard deviation 0.9--1.5\,mm on the mean error), which indicates that these values are repeatable. The ball was detected in 100\,\% of the analyzed frames.
+
+\input{tab_per_run}
+
+\section{Effect of the Control Changes}
+\label{sec:exp_before_after}
+
+Table~\ref{tab:before_after} and Figure~\ref{fig:exp_before_after} compare the final configuration with run 1. Before the changes, the derivative term reacted to the ball's own velocity, and therefore also braked a ball that was correctly following a moving target. The ball lagged the target by 0.37--0.43\,s and its path was 25--48\,\% larger than the target. Making the derivative act on the velocity relative to the target, and filtering the depth used to scale the position, removed most of this lag and \textbf{reduced the mean tracking error by 36--61\,\%} on the moving patterns and by 34\,\% at the center.
+
+\input{tab_before_after}
+
+\begin{figure}[H]
+   \centering
+   \includegraphics[width=0.75\textwidth]{circle_before_after.pdf}
+   \caption{\textit{CIRCLE in steady state before (run 1) and after (run 9) the control changes.}}
+   \label{fig:exp_before_after}
+\end{figure}
+
+\section{Discussion and Limitations}
+\label{sec:exp_limits}
+
+The measurements show that the system stabilizes the ball at a fixed point with an error of a few millimeters and follows the three trajectories with a repeatable error of 12--17\,mm, which is small compared with the size of the trajectories (60\,mm) and of the area in which the ball can move (about 117\,mm from the center of the platform). The remaining error is dominated by the outward deviation on curved paths rather than by lag. Reducing it would probably require a \textit{feed-forward} term derived from the target's acceleration, or a model-based controller such as the LQR or MPC approaches proposed in the future developments; this was not tested.
+
+The results have the following limitations:
+\begin{itemize}
+    \item \textbf{Number of runs:} Three to four runs per pattern, recorded in one session and one lighting condition; the standard deviations describe the repeatability between these runs only.
+    \item \textbf{Fixed transitions:} Each phase is preceded by a fixed pattern (the cycling order), so the settling times characterize those particular transitions.
+    \item \textbf{Single sensor:} The ball position is measured by the same camera that closes the loop. Systematic errors of the vision system (for example in the depth scale) would affect the target and the measurement in the same way and are not visible in these metrics.
+\end{itemize}

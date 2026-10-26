@@ -1,0 +1,71 @@
+#ifndef INVERSE_KINEMATICS_H
+#define INVERSE_KINEMATICS_H
+
+// #include "TeensyTimerTool.h"
+#include "uartComm.h"
+
+// Dimensiuni mecanice (modifică valorile cu cele reale)
+const float L1 = 98.1;    // Lungime braț motor (mm)
+const float L2 = 92.0;    // Lungime braț intermediar (mm)
+const float L3 = 54.0;    // Lungime link sub platformă (mm)
+const float Rb = 129.0;   // Raza bazei (centru - ax motor) (mm)
+const float Rp = 110.0;    // Raza platformei (centru - prindere) (mm)
+const float h0 = 100.0;   // Înălțimea neutră (mm)
+
+// Ball positions from the Pi are real mm since the calibration-free detector;
+// the old HSV detector reported ~1/1.4 of that (it over-estimated the ball
+// radius). Every gain and distance tuned in the old units is scaled by this,
+// so the behaviour is unchanged. Keep in sync with UNIT_SCALE in ball_detector.py.
+const float UNIT_SCALE = 1.4f;
+
+// Size/speed of the target patterns in main.cpp, in real mm. Separate from
+// UNIT_SCALE on purpose: it's a design choice, not a unit conversion. At 1.4
+// the star/figure-8 reached 84 mm and the ball ran off the ~120 mm plate.
+// Keep in sync with PATTERN_SCALE in ball_detector.py (GUI minimap).
+const float PATTERN_SCALE = 1.0f;
+
+// --- ARM RANGE: the arms must rest on their mechanical low stop when START
+// arrives from the Pi; that pose is 0 deg (positive = up). Every arm command is kept inside
+// [ARM_MIN_DEG, ARM_MAX_DEG], so the arms never grind into the low stop.
+const float ARM_MIN_DEG       = 5.0f;   // stay this far above the low stop (2 deg still ground)
+const float ARM_MAX_DEG       = 40.0f;  // hard limit above the low stop; the old start-up test went
+                                        // 25 deg above the Z~200 mm neutral, so normal running stays below
+const float ARM_LIFT_S        = 1.0f;   // start-up: lift from the stop to ARM_MIN_DEG this slowly
+
+// --- RE-HOMING: the steppers have no encoders, and violent moves (false detections,
+// a falling ball) lose steps: the arms then sit lower or tilted against what the
+// firmware counts (seen: counted 34 deg while Z said ~8 deg; ball held 65 mm off
+// centre by a tilt offset). When the ball has been gone for REHOME_LOST_MS the arms
+// sink slowly to REHOME_BELOW_DEG under the counted stop, so each one stalls on its
+// real stop, and that becomes 0 deg again.
+const uint32_t REHOME_LOST_MS  = 3000;
+const float REHOME_RATE_DEG_S  = 6.0f;
+const float REHOME_BELOW_DEG   = 4.0f;
+
+// --- PLATE HEIGHT: while balancing, all arms rise/sink together until the
+// ball is Z_TARGET_MM from the camera (the Pi measures Z from the ball's size;
+// the camera is under the plate, so raising the plate increases Z) ---
+const float Z_TARGET_MM       = 195.0f; // where the plate used to sit (190-200 mm)
+const float Z_DEADBAND_MM     = 4.0f;   // close enough: hold the height
+const float HEIGHT_GAIN       = 0.05f;  // deg/s of arm motion per mm of height error...
+const float HEIGHT_RATE_DEG_S = 2.0f;   // ...capped at this
+// The shared height keeps 12 deg of tilt room below (with 10 the low-side arm hit
+// ARM_MIN_DEG as soon as pitch and roll together asked for more than 10 deg, and
+// stopped reacting). Upwards it is only bounded by the arms' hard limit: a cap
+// 10 deg below it stopped the height control while it still had to rise; the
+// high-side arm is still clamped at ARM_MAX_DEG.
+const float HEIGHT_MIN_DEG    = ARM_MIN_DEG + 12.0f;
+const float HEIGHT_MAX_DEG    = ARM_MAX_DEG;
+
+// --- EDGE GUARD: target back to the centre when the ball nears the edge/screws
+const float EDGE_GUARD_MM     = 85.0f;  // ball this far from the plate centre: guard on
+const float EDGE_RESUME_MM    = 40.0f;  // pattern resumes once it is back inside this
+
+const float servo_gamma[4] = {5*PI/4.0f, 3*PI/4.0f, PI/4.0f, 7*PI/4.0f};
+extern volatile float motorAngles[4];
+
+float calculateArmAngle(int i, float pitch, float roll);
+void computeMotorAngles(float targetX, float targetY, volatile float *motorAngles);
+void resetPID();
+
+#endif

@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "octobouncer")(type "KiCad")(uri "${KIPRJMOD}/octobouncer.kicad_sym")(options "")(descr "OctoBouncer custom symbols"))
+)
