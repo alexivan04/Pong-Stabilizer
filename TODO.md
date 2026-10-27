@@ -46,6 +46,7 @@
   - https://gist.github.com/Hermann-SW/e6049fe1a24fc2b5a53c654e0e9f6b9c (crop tool)
   - https://forums.raspberrypi.com/viewtopic.php?p=2301171
   - https://docs.arducam.com/Raspberry-Pi-Camera/Native-camera/Global-Shutter/1.58MP-IMX296/
+  https://forums.raspberrypi.com/viewtopic.php?p=2090249#p2090249
   - Exposure max 8.3 ms at 120 fps: half the light (needs the light ring), half the motion blur.
   - Shift the camera matrix by the crop offset (no new checkerboard needed).
   - Budget 8.3 ms per frame: tracking ~2 ms OK, full search ~17 ms skips frames.
@@ -73,3 +74,14 @@
 - **Real bounce.** Open-loop kick on command -> detect landing from Z -> kick in sync -> tilt at
   impact. Limits: 60 fps (a 2 cm hop is 8 frames; 16 at 120 fps) and the PET-G joints under
   impacts. Much easier with the 5:1 gearbox (see above) and the faster camera (see Vision).
+- **Two rigs bouncing the ball to each other** (after the single-rig bounce works). Plates side by
+  side (~25 cm apart): with +-12 deg tilt the ball leaves ~24 deg from vertical, needs ~1.8 m/s,
+  rises ~14 cm, flies ~0.7 s (~40 frames at 60 fps). Most energy comes from the ball's own
+  rebound; the plate only adds what each impact loses.
+  - The two Pis share the ball state over the network (UDP); the receiver predicts the landing
+    point and moves its plate there.
+  - The tilt at impact decides where the ball goes next, so it needs the gravity-referenced
+    levelling (markers + camera offset).
+  - Check that the receiving camera sees the incoming ball early enough (fisheye, from the side).
+  - Steps: stable vertical bounce -> bounce to a chosen point on the same plate -> bounce to a
+    fixed target -> ping-pong between two rigs.
